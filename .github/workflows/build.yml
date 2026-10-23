@@ -1,0 +1,28 @@
+name: Build and core checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Frontend dependencies
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.20.0 --activate
+          pnpm install --frozen-lockfile
+      - name: Build simulator and WPF without vendor SDK
+        shell: powershell
+        run: ./scripts/build.ps1
+      - name: Core and communication checks
+        shell: powershell
+        run: ./scripts/check.ps1

@@ -1,0 +1,15 @@
+**/bin/
+**/obj/
+node_modules/
+.pnpm-store/
+data/
+.cache/
+artifacts/
+dist/
+src/Host/wwwroot/
+!src/Host/wwwroot/.gitkeep
+*.user
+*.log
+AwakenGPUToolLog.txt
+src/WpfDemo/Tools/
+src/WpfDemo/captures/
