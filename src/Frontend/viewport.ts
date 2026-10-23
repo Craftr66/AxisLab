@@ -91,6 +91,28 @@ function disposeGraph(root: THREE.Object3D) {
     if (object instanceof THREE.Sprite) { object.material.map?.dispose(); object.material.dispose(); }
   });
 }
+function industrialModel(d:Device,photo=false){
+  const group=new THREE.Group(),p=d.parameters;
+  if(d.typeId==='mechanism.conveyor'){
+    group.add(mesh(new THREE.BoxGeometry(p.sizeX,p.sizeY,p.sizeZ),dark,[0,0,0]));
+    group.add(mesh(new THREE.BoxGeometry(p.sizeX-12,p.sizeY-20,5),teal,[0,0,p.sizeZ/2+1]));
+    for(const y of [-p.sizeY/2,p.sizeY/2])group.add(mesh(new THREE.BoxGeometry(p.sizeX,12,16),metal,[0,y,p.sizeZ/2]));
+    for(let n=0;n<14;n++)group.add(mesh(new THREE.BoxGeometry(5,p.sizeY-24,2),dark,[(n/13-.5)*(p.sizeX-20),0,p.sizeZ/2+4]));
+    const leg=Math.max(20,d.transform.z-p.sizeZ/2);
+    for(const x of [-p.sizeX*.4,p.sizeX*.4])for(const y of [-p.sizeY*.35,p.sizeY*.35])group.add(mesh(new THREE.BoxGeometry(18,18,leg),metal,[x,y,-p.sizeZ/2-leg/2]));
+  }else if(d.typeId==='tool.gripper'){
+    group.add(mesh(new THREE.BoxGeometry(p.sizeX,p.sizeY*.8,p.sizeZ*.4),teal,[0,0,-p.sizeZ*.7]));
+    const jaws=[-1,1].map(side=>mesh(new THREE.BoxGeometry(p.sizeX*.125,p.sizeY*.37,p.sizeZ*.8),metal,[side*p.sizeX*.525,0,-p.sizeZ/6]));
+    group.add(...jaws);group.userData.gripJaws=jaws;group.userData.gripWidth=p.sizeX;
+  }else if(d.typeId==='sensor.photoelectric'){
+    for(const y of [-p.sizeY/2,p.sizeY/2])group.add(mesh(new THREE.BoxGeometry(22,22,30),orange,[0,y,0]));
+    if(!photo){const beam=mesh(new THREE.BoxGeometry(2,p.sizeY,2),new THREE.MeshBasicMaterial({color:0x5ee0c0,transparent:true,opacity:.65}),[0,0,0]);group.add(beam);group.userData.sensorBeam=beam;}
+  }else{
+    group.add(mesh(new THREE.BoxGeometry(p.sizeX,p.sizeY,p.sizeZ),teal,[0,0,0]));
+    const mark=mesh(new THREE.CircleGeometry(Math.min(p.sizeX,p.sizeY)*.16,32),dark,[0,0,p.sizeZ/2+.1]);group.add(mark);
+  }
+  return group;
+}
 function calibrationTarget(d: Device) {
   const group = new THREE.Group();
   const p = d.parameters;
@@ -134,12 +156,22 @@ function applyRuntime(objects: Map<string, THREE.Group>, runtime: RuntimeSnapsho
     visual.flange.matrix.fromArray(state.flangeBase.matrix); visual.flange.matrixWorldNeedsUpdate = true;
     visual.tool.matrix.fromArray(state.tcpBase.matrix); visual.tool.matrixWorldNeedsUpdate = true;
   }
+  for(const frame of runtime.devices){const object=objects.get(frame.deviceId);if(!object?.userData.pickable)continue;
+    object.parent?.updateWorldMatrix(true,false);const matrix=new THREE.Matrix4().fromArray(frame.world.matrix);
+    if(object.parent)matrix.premultiply(object.parent.matrixWorld.clone().invert());matrix.decompose(object.position,object.quaternion,object.scale);object.updateMatrixWorld(true);
+  }
+  for(const state of runtime.instruments??[]){const object=objects.get(state.deviceId);if(!object)continue;
+    const jaws=object.userData.gripJaws as THREE.Mesh[]|undefined;jaws?.forEach((jaw,i)=>jaw.position.x=(i===0?-1:1)*Number(object.userData.gripWidth)*(state.closed ? .3125 : .525));
+    const beam=object.userData.sensorBeam as THREE.Mesh|undefined;if(beam)(beam.material as THREE.MeshBasicMaterial).color.setHex(state.input?0xff6e6e:0x5ee0c0);
+  }
 }
 function populateGraph(root: THREE.Group, objects: Map<string, THREE.Group>, devices: Device[], runtime?: RuntimeSnapshot, photoCameraId?: string) {
   for (const d of devices) {
-    const object = d.robot ? robotModel(d, !!photoCameraId) : d.typeId === 'camera.pinhole' ? cameraModel(d, !!photoCameraId, d.id === photoCameraId) : d.typeId.startsWith('vision.') ? calibrationTarget(d) :
+    const object = d.robot ? robotModel(d, !!photoCameraId) : d.typeId === 'camera.pinhole' ? cameraModel(d, !!photoCameraId, d.id === photoCameraId) : d.typeId.startsWith('vision.') ? calibrationTarget(d) : ['mechanism.conveyor','tool.gripper','sensor.photoelectric','material.workpiece'].includes(d.typeId)?industrialModel(d,!!photoCameraId):
       new THREE.Group().add(new THREE.Mesh(new THREE.BoxGeometry(d.parameters.sizeX, d.parameters.sizeY, d.parameters.sizeZ), boxMaterial));
     object.userData.deviceId = d.id; object.visible = d.visible;
+    object.userData.typeId=d.typeId;
+    object.userData.pickable=d.typeId==='material.workpiece'||d.typeId==='vision.orientedPart';
     const t = d.transform;
     object.position.set(t.x, t.y, t.z); object.rotation.set(t.rx * deg, t.ry * deg, t.rz * deg, 'ZYX');
     objects.set(d.id, object);
@@ -269,7 +301,7 @@ export class Viewport {
   updateRuntime(runtime: RuntimeSnapshot) {
     applyRuntime(this.objects, runtime);
     this.scene.updateMatrixWorld(true);
-    this.transform.enabled = !runtime.robots.some(r => r.status === 'Running' || r.controlOwnerId);
+    this.transform.enabled = !runtime.robots.some(r => r.status === 'Running' || r.controlOwnerId)&&runtime.cell?.status!=='Running'&&!runtime.instruments?.some(i=>i.running);
     const robot = runtime.robots.find(r=>r.deviceId === this.selected);
     this.workAxes.visible = !!robot;
     if (robot) this.workAxes.matrix.fromArray(robot.workWorld.matrix);
@@ -298,6 +330,11 @@ export class Viewport {
     const angles = new THREE.Euler().setFromRotationMatrix(local, 'ZYX');
     const p = new THREE.Vector3().setFromMatrixPosition(local);
     return { x: p.x, y: p.y, z: p.z, rx: angles.x / deg, ry: angles.y / deg, rz: angles.z / deg };
+  }
+  focusCell(){
+    const bounds=new THREE.Box3();for(const object of this.objects.values())if(object.userData.typeId!=='camera.pinhole')bounds.expandByObject(object);
+    if(bounds.isEmpty())return;const target=bounds.getCenter(new THREE.Vector3()),size=bounds.getSize(new THREE.Vector3());
+    const scale=Math.max(size.x,size.y,size.z,250);this.orbit.target.copy(target);this.camera.position.copy(target).add(new THREE.Vector3(1.05,-1.3,.85).multiplyScalar(scale));this.orbit.update();
   }
   async capture(work: CaptureWork): Promise<Blob> {
     if (this.renderer.getContext().isContextLost()) throw new Error('WebGL 上下文已失效，请重启界面。');

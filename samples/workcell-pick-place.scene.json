@@ -1,0 +1,551 @@
+{
+  "schemaVersion": 8,
+  "id": "4be5acac-66dd-440e-be56-908d1cff49bd",
+  "name": "AxisLab \u5149\u7535\u505C\u5E26\u793A\u6559\u53D6\u653E",
+  "nextDeviceNumber": 8,
+  "devices": [
+    {
+      "id": "efdeca77-b40e-41fb-8f38-e24dad9a363a",
+      "typeId": "robot.generic6r",
+      "name": "\u516D\u8F74\u673A\u68B0\u81C2 1",
+      "deviceNumber": 1,
+      "parentId": null,
+      "transform": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "rx": 0,
+        "ry": 0,
+        "rz": 0
+      },
+      "parameters": {
+        "width": 640,
+        "height": 480,
+        "fx": 554.256,
+        "fy": 554.256,
+        "cx": 320,
+        "cy": 240,
+        "sizeX": 120,
+        "sizeY": 120,
+        "sizeZ": 120
+      },
+      "configurationRevision": 1,
+      "visible": true,
+      "attachmentFrameId": "base",
+      "robot": {
+        "modelId": "axislab-6r-v1",
+        "jointPositions": [
+          44.989092968534585,
+          -6.635576573017421,
+          6.856699277278576,
+          2.8352748817192706E-10,
+          89.77885579169866,
+          44.989092968526414
+        ],
+        "toolTransform": {
+          "x": 0,
+          "y": 0,
+          "z": 80,
+          "rx": 0,
+          "ry": -90,
+          "rz": 0
+        },
+        "geometry": {
+          "baseHeight": 135,
+          "shoulderHeight": 110,
+          "upperArm": 300,
+          "forearm": 280,
+          "wrist1": 80,
+          "wrist2": 70,
+          "flangeLength": 55,
+          "joint1Diameter": 110,
+          "joint2Diameter": 110,
+          "joint3Diameter": 110,
+          "joint4Diameter": 74,
+          "joint5Diameter": 74,
+          "joint6Diameter": 74
+        },
+        "workTransform": {
+          "x": 0,
+          "y": 0,
+          "z": 0,
+          "rx": 0,
+          "ry": 0,
+          "rz": 0
+        }
+      },
+      "conveyor": null,
+      "gripper": null,
+      "photoelectric": null
+    },
+    {
+      "id": "24ab4be3-ff1a-4260-9d2c-39f90c16c06a",
+      "typeId": "mechanism.conveyor",
+      "name": "\u8FDB\u6599\u4F20\u9001\u5E26",
+      "deviceNumber": 2,
+      "parentId": null,
+      "transform": {
+        "x": 240.08758393330834,
+        "y": 0,
+        "z": 191.602891649813,
+        "rx": 0,
+        "ry": 0,
+        "rz": 0
+      },
+      "parameters": {
+        "width": 640,
+        "height": 480,
+        "fx": 554.256,
+        "fy": 554.256,
+        "cx": 320,
+        "cy": 240,
+        "sizeX": 280,
+        "sizeY": 160,
+        "sizeZ": 50
+      },
+      "configurationRevision": 1,
+      "visible": true,
+      "attachmentFrameId": "base",
+      "robot": null,
+      "conveyor": {
+        "speed": 90
+      },
+      "gripper": null,
+      "photoelectric": null
+    },
+    {
+      "id": "c76df00d-1fbb-4017-bfb9-1c635616a3a8",
+      "typeId": "camera.pinhole",
+      "name": "\u9876\u90E8\u5B9A\u4F4D\u76F8\u673A",
+      "deviceNumber": 3,
+      "parentId": null,
+      "transform": {
+        "x": 270.08758393330834,
+        "y": 0,
+        "z": 850,
+        "rx": 180,
+        "ry": 0,
+        "rz": 0
+      },
+      "parameters": {
+        "width": 640,
+        "height": 480,
+        "fx": 554.256,
+        "fy": 554.256,
+        "cx": 320,
+        "cy": 240,
+        "sizeX": 120,
+        "sizeY": 120,
+        "sizeZ": 120
+      },
+      "configurationRevision": 1,
+      "visible": true,
+      "attachmentFrameId": "base",
+      "robot": null,
+      "conveyor": null,
+      "gripper": null,
+      "photoelectric": null
+    },
+    {
+      "id": "90e359ae-10fc-47e6-9e0a-a2fef6d54131",
+      "typeId": "sensor.photoelectric",
+      "name": "\u5230\u4F4D\u5149\u7535",
+      "deviceNumber": 4,
+      "parentId": "24ab4be3-ff1a-4260-9d2c-39f90c16c06a",
+      "transform": {
+        "x": 52,
+        "y": 0,
+        "z": 45,
+        "rx": 0,
+        "ry": 0,
+        "rz": 0
+      },
+      "parameters": {
+        "width": 640,
+        "height": 480,
+        "fx": 554.256,
+        "fy": 554.256,
+        "cx": 320,
+        "cy": 240,
+        "sizeX": 4,
+        "sizeY": 180,
+        "sizeZ": 20
+      },
+      "configurationRevision": 1,
+      "visible": true,
+      "attachmentFrameId": "base",
+      "robot": null,
+      "conveyor": null,
+      "gripper": null,
+      "photoelectric": {
+        "cameraId": "c76df00d-1fbb-4017-bfb9-1c635616a3a8",
+        "stopConveyorId": "24ab4be3-ff1a-4260-9d2c-39f90c16c06a",
+        "enabled": true
+      }
+    },
+    {
+      "id": "19107c82-2275-4fdc-b3dc-d175f38f8bd5",
+      "typeId": "tool.gripper",
+      "name": "TCP \u5E73\u884C\u5939\u722A",
+      "deviceNumber": 5,
+      "parentId": "efdeca77-b40e-41fb-8f38-e24dad9a363a",
+      "transform": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "rx": 0,
+        "ry": 90,
+        "rz": 0
+      },
+      "parameters": {
+        "width": 640,
+        "height": 480,
+        "fx": 554.256,
+        "fy": 554.256,
+        "cx": 320,
+        "cy": 240,
+        "sizeX": 80,
+        "sizeY": 60,
+        "sizeZ": 60
+      },
+      "configurationRevision": 1,
+      "visible": true,
+      "attachmentFrameId": "tool",
+      "robot": null,
+      "conveyor": null,
+      "gripper": {
+        "graspRange": 15
+      },
+      "photoelectric": null
+    },
+    {
+      "id": "26a5ec97-9342-42db-b5f8-ed83d2311748",
+      "typeId": "material.workpiece",
+      "name": "\u5F85\u6293\u53D6\u5DE5\u4EF6",
+      "deviceNumber": 6,
+      "parentId": "24ab4be3-ff1a-4260-9d2c-39f90c16c06a",
+      "transform": {
+        "x": -110,
+        "y": 0,
+        "z": 45,
+        "rx": 0,
+        "ry": 0,
+        "rz": 0
+      },
+      "parameters": {
+        "width": 640,
+        "height": 480,
+        "fx": 554.256,
+        "fy": 554.256,
+        "cx": 320,
+        "cy": 240,
+        "sizeX": 40,
+        "sizeY": 40,
+        "sizeZ": 40
+      },
+      "configurationRevision": 1,
+      "visible": true,
+      "attachmentFrameId": "base",
+      "robot": null,
+      "conveyor": null,
+      "gripper": null,
+      "photoelectric": null
+    },
+    {
+      "id": "a8975c8c-2bbb-4c1e-9d88-46eaa40b2f1a",
+      "typeId": "geometry.box",
+      "name": "\u653E\u6599\u5DE5\u4F4D",
+      "deviceNumber": 7,
+      "parentId": null,
+      "transform": {
+        "x": 230.08758393330834,
+        "y": 230,
+        "z": 108.3014458249065,
+        "rx": 0,
+        "ry": 0,
+        "rz": 0
+      },
+      "parameters": {
+        "width": 640,
+        "height": 480,
+        "fx": 554.256,
+        "fy": 554.256,
+        "cx": 320,
+        "cy": 240,
+        "sizeX": 130,
+        "sizeY": 130,
+        "sizeZ": 216.602891649813
+      },
+      "configurationRevision": 1,
+      "visible": true,
+      "attachmentFrameId": "base",
+      "robot": null,
+      "conveyor": null,
+      "gripper": null,
+      "photoelectric": null
+    }
+  ],
+  "teachPoints": [
+    {
+      "id": "6ed1d9e3-f23e-4fe3-8f00-ab7ac9070c14",
+      "number": 1,
+      "robotId": "efdeca77-b40e-41fb-8f38-e24dad9a363a",
+      "name": "01 \u53D6\u6599\u63A5\u8FD1",
+      "joints": [
+        -2.5920884492925424E-11,
+        -17.414191379377556,
+        18.94974320534824,
+        3.064799208610901E-11,
+        88.46444598621694,
+        -2.7524541451448738E-11
+      ],
+      "frame": "base",
+      "target": {
+        "x": 270.08758756749774,
+        "y": -1.2572078194124425E-11,
+        "z": 316.6028675554682,
+        "rx": 0.0008023402545594049,
+        "ry": 89.99999774112727,
+        "rz": 0.0008023402553417802
+      },
+      "dependencySignature": "23F292A6D3E29B9AAD8D640A3C7EE0B58DA40F45C5756A77FD34D33539E81906"
+    },
+    {
+      "id": "f87179d4-fe8a-4adb-8696-2442da7b444e",
+      "number": 2,
+      "robotId": "efdeca77-b40e-41fb-8f38-e24dad9a363a",
+      "name": "02 \u53D6\u6599",
+      "joints": [
+        -2.6674972430732252E-11,
+        -15.000000102717184,
+        30.00000330653293,
+        3.044663308271056E-11,
+        74.9999945305297,
+        -3.431414899603573E-11
+      ],
+      "frame": "base",
+      "target": {
+        "x": 270.0875863100791,
+        "y": -2.0519753691938596E-11,
+        "z": 236.60287206636457,
+        "rx": 0.0007437242854397331,
+        "ry": 89.9999979086902,
+        "rz": 0.0007437242851987388
+      },
+      "dependencySignature": "23F292A6D3E29B9AAD8D640A3C7EE0B58DA40F45C5756A77FD34D33539E81906"
+    },
+    {
+      "id": "db239882-6cdd-4761-9fdf-dcaf00da8ec7",
+      "number": 3,
+      "robotId": "efdeca77-b40e-41fb-8f38-e24dad9a363a",
+      "name": "03 \u62AC\u5347",
+      "joints": [
+        -2.1726232845149636E-10,
+        -17.410218769211408,
+        15.763653637040676,
+        2.8914695374379447E-10,
+        91.6465445825631,
+        -2.2369164746321096E-10
+      ],
+      "frame": "base",
+      "target": {
+        "x": 270.0881336436401,
+        "y": 9.960143521488956E-12,
+        "z": 336.6003435909819,
+        "rx": 0.0008058574747444999,
+        "ry": 89.99997945614095,
+        "rz": 0.0008058574894821234
+      },
+      "dependencySignature": "23F292A6D3E29B9AAD8D640A3C7EE0B58DA40F45C5756A77FD34D33539E81906"
+    },
+    {
+      "id": "320cebbb-85ea-4eec-a798-b32903fa2115",
+      "number": 4,
+      "robotId": "efdeca77-b40e-41fb-8f38-e24dad9a363a",
+      "name": "04 \u653E\u6599\u63A5\u8FD1",
+      "joints": [
+        44.988913609739484,
+        -6.6358651616871125,
+        6.856699361652238,
+        -5.895766972786615E-06,
+        89.7791596902573,
+        44.98891881160658
+      ],
+      "frame": "base",
+      "target": {
+        "x": 230.08733438134718,
+        "y": 229.99828073654305,
+        "z": 336.6026485356068,
+        "rx": 1.0103767310455096,
+        "ry": 89.99999146226354,
+        "rz": 1.010371548837062
+      },
+      "dependencySignature": "23F292A6D3E29B9AAD8D640A3C7EE0B58DA40F45C5756A77FD34D33539E81906"
+    },
+    {
+      "id": "4c688461-1bdb-4678-a5b2-f779cb23e272",
+      "number": 5,
+      "robotId": "efdeca77-b40e-41fb-8f38-e24dad9a363a",
+      "name": "05 \u653E\u6599",
+      "joints": [
+        44.98909296741781,
+        -3.763927816434319,
+        20.347981153083612,
+        2.0604728390279282E-10,
+        73.41592570673036,
+        44.98909296741414
+      ],
+      "frame": "base",
+      "target": {
+        "x": 230.0876184892641,
+        "y": 230.00003453337433,
+        "z": 236.6011101990552,
+        "rx": 44.98963287075527,
+        "ry": 89.99997903468456,
+        "rz": 44.98963286990996
+      },
+      "dependencySignature": "23F292A6D3E29B9AAD8D640A3C7EE0B58DA40F45C5756A77FD34D33539E81906"
+    },
+    {
+      "id": "9faf09e9-3da7-48bb-a3d6-85b1b8b39256",
+      "number": 6,
+      "robotId": "efdeca77-b40e-41fb-8f38-e24dad9a363a",
+      "name": "06 \u9000\u56DE",
+      "joints": [
+        44.989092968534585,
+        -6.635576573017421,
+        6.856699277278576,
+        2.8352748817192706E-10,
+        89.77885579169866,
+        44.989092968526414
+      ],
+      "frame": "base",
+      "target": {
+        "x": 230.08769500494788,
+        "y": 230.00011102933328,
+        "z": 336.60101043433394,
+        "rx": 44.98984839900957,
+        "ry": 89.99997848558174,
+        "rz": 44.989848400404696
+      },
+      "dependencySignature": "23F292A6D3E29B9AAD8D640A3C7EE0B58DA40F45C5756A77FD34D33539E81906"
+    }
+  ],
+  "nextTeachPointNumber": 7,
+  "cellSequence": {
+    "id": "189704d6-3a90-4121-a5af-096e3ecceb0d",
+    "name": "\u5149\u7535\u505C\u5E26 \u00B7 \u793A\u6559\u53D6\u653E",
+    "robotId": "efdeca77-b40e-41fb-8f38-e24dad9a363a",
+    "conveyorId": "24ab4be3-ff1a-4260-9d2c-39f90c16c06a",
+    "sensorId": "90e359ae-10fc-47e6-9e0a-a2fef6d54131",
+    "gripperId": "19107c82-2275-4fdc-b3dc-d175f38f8bd5",
+    "cameraId": "c76df00d-1fbb-4017-bfb9-1c635616a3a8",
+    "steps": [
+      {
+        "name": "\u6253\u5F00\u5939\u722A",
+        "action": "Grip",
+        "deviceId": "19107c82-2275-4fdc-b3dc-d175f38f8bd5",
+        "pointId": null,
+        "value": 0,
+        "timeout": 30
+      },
+      {
+        "name": "\u542F\u52A8\u4F20\u9001\u5E26",
+        "action": "Conveyor",
+        "deviceId": "24ab4be3-ff1a-4260-9d2c-39f90c16c06a",
+        "pointId": null,
+        "value": 90,
+        "timeout": 30
+      },
+      {
+        "name": "\u7B49\u5F85\u5149\u7535\u4E0A\u5347\u6CBF",
+        "action": "WaitSensor",
+        "deviceId": "90e359ae-10fc-47e6-9e0a-a2fef6d54131",
+        "pointId": null,
+        "value": 0,
+        "timeout": 60
+      },
+      {
+        "name": "\u505C\u5E26\u786E\u8BA4",
+        "action": "Conveyor",
+        "deviceId": "24ab4be3-ff1a-4260-9d2c-39f90c16c06a",
+        "pointId": null,
+        "value": 0,
+        "timeout": 30
+      },
+      {
+        "name": "\u7B49\u5F85\u5149\u7535\u89E6\u53D1\u56FE\u50CF\u5B8C\u6210",
+        "action": "WaitCapture",
+        "deviceId": "c76df00d-1fbb-4017-bfb9-1c635616a3a8",
+        "pointId": null,
+        "value": 0,
+        "timeout": 15
+      },
+      {
+        "name": "\u53D6\u6599\u63A5\u8FD1",
+        "action": "MoveTeach",
+        "deviceId": "efdeca77-b40e-41fb-8f38-e24dad9a363a",
+        "pointId": "6ed1d9e3-f23e-4fe3-8f00-ab7ac9070c14",
+        "value": 0,
+        "timeout": 30
+      },
+      {
+        "name": "\u5230\u8FBE\u53D6\u6599\u70B9",
+        "action": "MoveTeach",
+        "deviceId": "efdeca77-b40e-41fb-8f38-e24dad9a363a",
+        "pointId": "f87179d4-fe8a-4adb-8696-2442da7b444e",
+        "value": 0,
+        "timeout": 30
+      },
+      {
+        "name": "\u95ED\u5408\u5939\u722A\u5E76\u786E\u8BA4\u5DE5\u4EF6",
+        "action": "Grip",
+        "deviceId": "19107c82-2275-4fdc-b3dc-d175f38f8bd5",
+        "pointId": null,
+        "value": 1,
+        "timeout": 30
+      },
+      {
+        "name": "\u62AC\u5347\u5DE5\u4EF6",
+        "action": "MoveTeach",
+        "deviceId": "efdeca77-b40e-41fb-8f38-e24dad9a363a",
+        "pointId": "db239882-6cdd-4761-9fdf-dcaf00da8ec7",
+        "value": 0,
+        "timeout": 30
+      },
+      {
+        "name": "\u653E\u6599\u63A5\u8FD1",
+        "action": "MoveTeach",
+        "deviceId": "efdeca77-b40e-41fb-8f38-e24dad9a363a",
+        "pointId": "320cebbb-85ea-4eec-a798-b32903fa2115",
+        "value": 0,
+        "timeout": 30
+      },
+      {
+        "name": "\u5230\u8FBE\u653E\u6599\u70B9",
+        "action": "MoveTeach",
+        "deviceId": "efdeca77-b40e-41fb-8f38-e24dad9a363a",
+        "pointId": "4c688461-1bdb-4678-a5b2-f779cb23e272",
+        "value": 0,
+        "timeout": 30
+      },
+      {
+        "name": "\u6253\u5F00\u5939\u722A\u5E76\u653E\u7F6E",
+        "action": "Grip",
+        "deviceId": "19107c82-2275-4fdc-b3dc-d175f38f8bd5",
+        "pointId": null,
+        "value": 0,
+        "timeout": 30
+      },
+      {
+        "name": "\u9000\u56DE\u5B89\u5168\u4F4D",
+        "action": "MoveTeach",
+        "deviceId": "efdeca77-b40e-41fb-8f38-e24dad9a363a",
+        "pointId": "9faf09e9-3da7-48bb-a3d6-85b1b8b39256",
+        "value": 0,
+        "timeout": 30
+      }
+    ],
+    "speedPercent": 50
+  }
+}

@@ -155,7 +155,7 @@ Reject(() => movement.Update(currentRobot.Id, runtimeBypass, moved.Revision), "U
 var legacy = saved.Project with { SchemaVersion = 1, Devices = saved.Project.Devices.Select(d => d with { Robot = null, AttachmentFrameId = "base" }).ToArray() };
 var legacyStore = new ProjectStore(Path.Combine(root, "legacy"));
 var migrated = legacyStore.Import(legacy, legacyStore.Get().Revision);
-Assert(migrated.Project.SchemaVersion == 7 && migrated.Project.Devices.Select(d => d.Id).SequenceEqual(legacy.Devices.Select(d => d.Id)), "legacy schema1 migrates without changing IDs");
+Assert(migrated.Project.SchemaVersion == 8 && migrated.Project.Devices.Select(d => d.Id).SequenceEqual(legacy.Devices.Select(d => d.Id)), "legacy schema1 migrates without changing IDs");
 Assert(migrated.Project.Devices.Where(d => d.TypeId == "robot.generic6r").All(d => d.Robot?.ModelId == Generic6R.ModelId), "legacy robots receive valid kinematic defaults");
 Position(Generic6R.Forward([0, 0, 0, 0, 0, 0], new(0, 0, 80), new(UpperArm: 420)).Tcp, 565, 0, 665, "longer upper arm changes analytic TCP height");
 Position(Generic6R.Forward([0, 0, 0, 0, 0, 0], new(0, 0, 80), new(Forearm: 380)).Tcp, 665, 0, 545, "longer forearm changes analytic TCP reach");
@@ -173,7 +173,7 @@ var geoOpen = geometryStore.Open(geo.Project.Id.ToString(), geo.Revision);
 Assert(geoOpen.Project.Devices[0].Robot!.Geometry == new RobotGeometry(UpperArm: 420, Joint2Diameter: 150), "dimensions survive disk save and reopen");
 var version2 = geo.Project with { SchemaVersion = 2, Devices = geo.Project.Devices.Select(d => d with { Robot = d.Robot! with { Geometry = null } }).ToArray() };
 var upgrade2 = geometryStore.Import(version2, geoOpen.Revision);
-Assert(upgrade2.Project.SchemaVersion == 7 && upgrade2.Project.Devices[0].Id == geoRobot.Id && upgrade2.Project.Devices[0].Robot!.Geometry == new RobotGeometry(), "schema2 receives dimensions with stable identity");
+Assert(upgrade2.Project.SchemaVersion == 8 && upgrade2.Project.Devices[0].Id == geoRobot.Id && upgrade2.Project.Devices[0].Robot!.Geometry == new RobotGeometry(), "schema2 receives dimensions with stable identity");
 geometryStore.MoveJoints(geoRobot.Id, [90, 0, 0, 0, 0, 0], 50, upgrade2.Revision);
 Reject(() => geometryStore.Update(geoRobot.Id, upgrade2.Project.Devices[0], geometryStore.Get().Revision), "MotionActive");
 
@@ -278,11 +278,11 @@ orientedState = orientedStore.Update(oriented.Id, oriented with { Transform = ne
 orientedState = orientedStore.Save("方向工件", orientedState.Revision);
 var orientedReopen = new ProjectStore(Path.Combine(root, "oriented"));
 var orientedOpened = orientedReopen.Open(orientedState.Project.Id.ToString("D"), orientedReopen.Get().Revision);
-Assert(orientedOpened.Project.SchemaVersion == 7 && orientedOpened.Project.Devices.Single().Transform.Rz == 37, "schema6 persists oriented workpiece geometry and direction");
+Assert(orientedOpened.Project.SchemaVersion == 8 && orientedOpened.Project.Devices.Single().Transform.Rz == 37, "schema6 persists oriented workpiece geometry and direction");
 var migrationStore = new ProjectStore(Path.Combine(root,"retired-program"));
 var oldDocument = saved.Project with { SchemaVersion=6, RetiredProgram=JsonSerializer.SerializeToElement(new { version=1, name="retired", workspace=new { } }) };
 var migratedProgram = migrationStore.Import(oldDocument,migrationStore.Get().Revision);
-Assert(migratedProgram.Project.SchemaVersion==7 && migratedProgram.Project.RetiredProgram is null, "old block program is discarded during schema7 import");
+Assert(migratedProgram.Project.SchemaVersion==8 && migratedProgram.Project.RetiredProgram is null, "old block program is discarded during schema7 import");
 Assert(migratedProgram.Project.Devices.Select(d=>d.Id).SequenceEqual(oldDocument.Devices.Select(d=>d.Id)) && migratedProgram.Project.TeachPoints!.Length==(oldDocument.TeachPoints?.Length??0), "program removal preserves device identity and teaching data");
 Assert(!JsonSerializer.Serialize(migratedProgram.Project,Catalog.Json).Contains("\"program\""), "saved schema7 no longer contains a program property");
 Console.WriteLine($"{checks} core checks passed. Test artifacts: {root}");

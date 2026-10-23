@@ -1,120 +1,121 @@
-﻿# AxisLab 2.0
+﻿# AxisLab 2.1 · 机械臂工作单元仿真
 
-机械臂与视觉仿真练习项目，包含 **AxisLab 仿真器**和 **WPF 上位机**两个 Windows 应用。统一源码、构建脚本和发布包。
+**AxisLab 是主体应用。** 它自身运行机械臂、传送带、夹爪、光电传感器和设备逻辑，可以独立完成示教取放。模拟相机直接连接 VisionMaster 采图、编辑流程和调试标定；WPF 仅保留为可选外部客户端示例，不参与默认启动，也不是运行依赖。
 
-主链路：
+![AxisLab 示教取放场景](docs/workcell-demo.png)
 
-```text
-AxisLab 场景 / 虚拟 GigE 相机
-             ↓ 图像
-VisionMaster：直接采图 → 检测 → 标定求解 → 坐标转换
-             ↓ 机器人基坐标目标（TCP JSON v2）
-WPF：校验结果 → 运动预检 → Modbus 控制 AxisLab
-```
-
-## 已确认的分工
-
-| 组件 | 负责的功能 |
-| --- | --- |
-| AxisLab | 场景和设备编辑、三轴 3R / 六轴 6R、尺寸配置、手动控制、FK/IK、MoveJ/MoveL、示教记录/回放、虚拟成像、HTTP/Modbus 服务 |
-| VisionMaster | 虚拟相机采图、视觉流程编辑与运行、像素检测、标定求解、坐标转换、生成完整机器人基坐标目标 |
-| WPF | 机器人采样动作、曝光姿态记录、样本导出、接收 VM 结果、帧关联校验、运动预检和设备控制 |
-
-已删除积木编辑器、积木执行引擎及相关接口；手动控制和示教保留。WPF 已删除 SDK 送图、加载方案、运行算法的模式及其工作进程，不再求解标定矩阵或把像素转换为机器人坐标。
-
-`src/VmDirectLink` 是运行在 **VM 进程内**的结果发布插件，需要本机 VM SDK 编译；WPF 不引用、不加载它或厂商 SDK。该插件只读取流程输出并通过 TCP 发送，采图、检测和转换由你的 VM 流程完成。
-
-## 下载与启动
-
-从 [GitHub Releases](https://github.com/Craftr66/AxisLab/releases) 下载 `AxisLab-2.0.0-win-x64.zip`，完整解压，双击 `Start-AxisLab.cmd`，会依次打开仿真器与 WPF。不要只复制一个 EXE。
-
-环境：Windows x64、WebView2 Runtime。发布包自带 .NET 运行时；VisionMaster 4.3、相机运行库与加密狗需自行安装和配置，不包含在发布包内。VM 插件使用 .NET Framework 4.8。
+本轮功能与验证范围见 [2.1 验收记录](docs/2.1-验收记录.md)。
 
 ```text
-AxisLab-2.0.0-win-x64/
-  Start-AxisLab.cmd / Start-AxisLab.ps1
-  Simulator/                 AxisLab.exe
-  Controller/                AxisLab.WpfDemo.exe
-    VirtualCamera/           虚拟 GigE 相机进程
-  VmIntegration/             VM 内结果发布插件与全局脚本模板
-  Samples/                   场景与外部 C# 示例
-  Docs/                      操作与通信文档
-  Licenses/                  第三方许可
-  manifest.json              文件清单与 SHA-256
+AxisLab
+ ├─ 三维场景、三轴/六轴、尺寸、运动与示教
+ ├─ 传送带 → 光电 → 停带/触发相机 → 夹爪取放
+ ├─ 内置设备动作表、流程执行、I/O 状态与停止
+ ├─ 虚拟 GigE 相机 ──图像──→ VisionMaster：检测、标定、定位
+ └─ Modbus TCP / HTTP ←──→ PLC、VM、C#、其他上位机（WPF 可选）
 ```
 
-统一启动入口使用系统分配的 HTTP 和 Modbus 端口。WPF 点击“自动检测 → 连接”，读取实际端口，无需固定为 5080/1502。数据位于 `%LOCALAPPDATA%\AxisLabSuite`。单独启动模拟器时默认数据目录为 `%LOCALAPPDATA%\AxisLab`，Modbus 默认 1502。
+## 下载与第一遍使用
 
-## 第一遍操作
+从 [Releases](https://github.com/Craftr66/AxisLab/releases) 下载 `AxisLab-2.1.0-win-x64.zip`，完整解压，运行 `Start-AxisLab.cmd` 或 `AxisLab.exe`。只打开 AxisLab。
 
-1. 仿真器导入 `Samples/oriented-positioning.scene.json`，查看六轴机器人、固定相机和方向工件。练习九点采样可导入 `planar-calibration.scene.json`。保持仿真窗口打开，图像由窗口内渲染器产生。
-2. WPF 连接仿真器，在设备列表分别选择机器人和相机。“机器人控制”可接管控制、手动运动、停止、释放控制。三轴只支持位置目标。
-3. WPF“相机与通信”选择本机 IPv4，启动虚拟 GigE 相机，记下自动生成的曝光记录目录。
-4. VM 相机管理连接 `AxisLabCam / AXISLAB001`；图像源选相机，触发模式 On、触发源 Software，在 VM 中采图、编流程。
-5. 按 [VM 接入与标定说明](docs/VM直接采图与WPF结果通信.md) 配置流程输出和全局脚本。保存 .sol 后，WPF“结果与执行”填写相同方案、流程、图像源和标定编号，绑定设备，开始监听。
-6. 在 VM 运行定位流程。WPF 收到基坐标目标后，点击“预检”，再执行一次定位。每次运动后要在 VM 重新采图。异常或 NG 结果不会触发运动。
+环境为 Windows x64、WebView2 Runtime；发布包自带 .NET 10，不需要 WPF Demo、.NET 9 或 VisionMaster SDK 才能运行仿真与示教。VM 的软件、相机运行库和加密狗由使用者自行安装。
 
-当前虚拟 GigE 适配器为实验功能：单路相机、Mono8、软件触发/低速连续采集、同机回传；不实现硬件精确时序或完整工业相机功能。本机已验证 tun0 接口；普通无线网卡的厂商过滤驱动可能无法同机采流。优先使用已验证接口，参见接入文档；软件不会自动修改网卡、驱动或防火墙。
+1. 点击工具栏 **载入取放演示**，或导入 `Samples/workcell-pick-place.scene.json`。
+2. 打开底部 **工作单元**，点击 **运行取放流程**。
+3. 物品沿传送带前进；光电遮挡后 DI 变为 1、停止传送带并触发一次实际相机曝光。
+4. 机器人依次接近、抓取、抬升、转移、放下，再退到安全点。工件随夹爪移动，释放后留在工位。
+5. 完成后点击 **复位物料**，可再次运行。停止按钮会取消流程、停止机器人和输送，已夹持物品保持夹持。
 
-## WPF 三个页签
+演示自带六个真实示教点和 13 个动作步骤。**示教抓放使用已记录的点位**，因此无需 VM 连接也可运行；本阶段没有把 VM 检测结果冒充成取放依据。
 
-| 页签 | 输入与操作 | 输出 |
+## 设备与内部逻辑
+
+| 设备 | 已实现行为 | 对外接口 |
 | --- | --- | --- |
-| 相机与通信 | 选择虚拟相机接口、启动适配器；VM 采图后读取最近图像 | 实际 PNG、帧身份、曝光记录；“读取”按钮不代替 VM 采图 |
-| 采样助手 | 设置 TCP 网格中心、逐点移动；每点在 VM 运行 sample 流程再记录 | PNG、曝光 TCP/法兰矩阵、关节、VM 像素、配对 CSV；标定由 VM 求解 |
-| 结果与执行 | 绑定已保存的 VM 方案与标定编号，监听 v2 结果 | 机器人基坐标目标、预检结果、一次 Modbus 运动 |
+| 六轴 6R / 三轴 3R | 尺寸、FK/IK、关节/位姿运动、MoveL、工具与工件坐标、示教及回放 | Modbus 与 HTTP |
+| 传送带 | 沿局部 +X 输送带面上的工件、速度、启动/停止 | 速度 DO 命令及状态寄存器 |
+| 平行夹爪 | 挂载机器人 TCP，开合、捕获范围检查、保持/释放工件 | 开合 DO、夹持状态与关联物料 |
+| 光电 | 检测体积内物品遮挡、DI、上升沿计数；可绑定停带和相机 | DI、计数、关联物料 |
+| 可抓取工件 | 输送、刚性夹持跟随、释放到工位、显式复位 | 世界位姿 |
+| 模拟相机 | 独立安装或挂到法兰/TCP，针孔成像、PNG、曝光姿态、虚拟 GigE | HTTP 图像、VM 直接采图 |
 
-九点网格用于固定相机的平面练习。只有靶标原点与 TCP 重合时，CSV 的 TCP XY 才能直接作为物理标定点；有安装偏置需在 VM 中处理。手眼标定需要额外采集多角度姿态，在 VM 内求解；九点平面标定不等于完整空间手眼标定。
+“设备动作表”包含传送带速度、等待光电上升沿、等待触发图像完成、运动到示教点、夹爪开合和延时。可修改步骤、设备、点位、值与超时，再点 **应用动作表 → 保存工程**。取放生成器负责把六个示教点组合成流程，并绑定光电停带/相机；它不依赖旧积木编辑器。
 
-WPF 检查方案摘要、标定编号、流程、相机帧号、曝光图像摘要、场景会话/修订、机器人曝光姿态、重复执行及 30 秒有效期。更改场景或标定后要刷新、重新绑定和采图。绑定是操作员确认该 VM 标定对应当前设备，不代表 WPF 已验证标定精度。
+机器人运动前检查示教点有效性、整条路径和基础碰撞。工作单元运行期间锁定编辑与外部抢控；故障、超时、相机失败或控制被撤销会停止流程和传送带。外部 Modbus 启动的传送带受 5 秒心跳及断线停止约束。
 
-## 外部连接
+详细操作见 [工作单元与示教取放](docs/工作单元与示教取放.md)。
 
-- **HTTP**：场景、设备、运行状态、图像及运动预检；地址以仿真器“外部连接”为准。
-- **Modbus TCP v1**：设备发现、控制权、心跳、动作、状态。功能码 03/06/16，Unit ID 1，零基 PDU 地址，Float32 ABCD。应用版本寄存器 2 为 `0x0200`，协议版本仍为 1。
-- **VM → WPF TCP v2**：默认 `127.0.0.1:7100`，单行 UTF-8 JSON 加 LF，最长 8KiB。VM 输出完整 `x/y/z/rx/ry/rz`，坐标系 `robot-base`，单位 `mm/deg`。WPF 不接受旧版双像素定位协议。
+## 模拟相机直接接入 VisionMaster
 
-详见 [外部连接快速开始](docs/外部连接快速开始.md)、[Modbus 操作协议](docs/ModbusTCP操作协议v1.md)、[相机 HTTP 接口](docs/相机HTTP接口.md)、[运动与示教接口](docs/运动与示教接口.md)。独立 C# 示例在 `samples/ModbusClient` 和 `samples/CSharpClient`。
+1. AxisLab 的 **相机 / VM 直采** 选择相机和本机网卡，点击 **发布虚拟 GigE 相机**。
+2. VM 相机管理连接 `AxisLabCam / AXISLAB001`，图像源选相机。
+3. 手动调试采图：TriggerMode=On，TriggerSource=Software，在 VM 内运行图像源/流程。
+4. 光电触发：TriggerMode=On，TriggerSource=Line0。先让 VM 进入采集等待，再在 AxisLab 运行取放流程。
+5. 在 VM 中自行添加检测、N 点标定、手眼/坐标转换等模块；AxisLab 不负责替 VM 求解视觉标定。
 
-## 从源码构建
+AxisLab 相机页还可 **保存 PNG、导出帧信息、导出标定观测**。标定观测包含同一次曝光的机械臂关节、法兰/TCP 矩阵和图像身份，排除相机安装真值和内参；配合示教动作，可在不打开 WPF 的情况下记录标定数据。完整帧信息仍供仿真调试使用。
 
-安装 .NET 10 SDK（含 Windows 桌面构建支持）、Node.js 22+ 和 pnpm。WPF 目标框架为 net9.0-windows，构建时需能获取相应参考包。
+当前 GigE 是实验实现：单路、Mono8、同机采流。多个场景相机可以添加，但本机一次发布一个 GigE 相机实例。已验证 tun0 接口；普通 WLAN 过滤驱动可能无法同机回传。软件不会修改网卡、驱动或防火墙。3956 被旧相机服务占用时，请先在旧入口停止该实例。
+
+参见 [VM 直接采图与标定](docs/VM直接采图与WPF结果通信.md)。该文件保留旧文件名便于已有链接使用，内容已改为 AxisLab 主导。
+
+## 外部 Modbus 与 C# 连接
+
+地址以 AxisLab 顶部 **外部连接** 为准。HTTP、Modbus 是不同端口；客户端可通过 HTTP 查询实际 Modbus 端口。Modbus 协议仍为 v1，扩展级别 2，Unit ID=1，03/06/16，零基 PDU 偏移，Float32 ABCD；应用版本寄存器 2=`0x0201`。
+
+| 选择对象后读取 | 含义 |
+| --- | --- |
+| 108，UInt16，仅仪器 | bit0 传送带运行，bit1 光电 DI，bit2 夹爪闭合，bit3 有关联物料 |
+| 110—111，UInt32，仅仪器 | 光电上升沿计数 |
+| 112—113，Float32，仅仪器 | 传送带速度，mm/s |
+| 114，UInt16，仅仪器 | 关联工件编号，0=无 |
+| 124—127，全局 | 流程状态、当前步、总步数、错误码 |
+
+相机的 108—117 仍按旧版解释为内参/分辨率，必须先判断设备类型。新增类型：30 传送带、31 夹爪、32 光电、33 工件。新增命令：10 传送带、11 夹爪、12 启动内部流程、13 停止内部流程；旧机器人命令 1—9 保持。
+
+```powershell
+$axisUrl='http://127.0.0.1:软件显示的HTTP端口'
+dotnet run --project samples/ModbusClient -- $axisUrl list
+dotnet run --project samples/ModbusClient -- $axisUrl io 4
+dotnet run --project samples/ModbusClient -- $axisUrl conveyor 2 80 5
+dotnet run --project samples/ModbusClient -- $axisUrl grip 5 open
+dotnet run --project samples/ModbusClient -- $axisUrl cell-start 1
+dotnet run --project samples/ModbusClient -- $axisUrl cell-stop 1
+```
+
+以上编号对应演示，自己搭建的场景以实际编号为准。VM 或其他外部程序也可经既有位姿命令控制机器人；需先停止内部流程、接管机器人并维护心跳。当前内置演示不等待 VM 返回定位坐标，视觉结果参与自动抓放的内部握手作为下一阶段。
+
+详见 [工作单元 Modbus 扩展](docs/工作单元Modbus扩展.md)、[既有 Modbus 协议](docs/ModbusTCP操作协议v1.md)、[运动与示教接口](docs/运动与示教接口.md)。
+
+## 构建与测试
+
+安装 .NET 10 SDK、Node.js 22+ 和 pnpm。
 
 ```powershell
 pnpm install --frozen-lockfile
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1
-# 浏览器与 WPF 集成检查，需要本机 Edge
+# 需要本机 Edge 和有效本机 IPv4：原功能与完整工作单元回归
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1 -Ui
-# 可选：虚拟 GigE 协议测试，需设置本机有效 IPv4
-$env:AXISLAB_CAMERA_IP='你的本机IPv4'
-node scripts/virtual-camera-protocol-checks.mjs
-# 完整发布包需本机 VisionMaster 4.3 SDK
+# 发布独立 AxisLab，不需要 VM SDK 或 WPF
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/publish.ps1
 ```
 
-普通解决方案不引用 VM SDK，未安装 VM 也可以构建仿真器、WPF 和虚拟相机。安装 VM 后可用 `scripts/build.ps1 -WithVisionMaster` 编译 VM 内插件；SDK 路径不同则单独运行 `dotnet build src/VmDirectLink/AxisLab.VmDirectLink.csproj -p:VmAssembly=你的Assembly目录 -m:1 -nr:false`。
-
-开发版启动网页服务用 `start.ps1`；桌面程序入口在 `src/Desktop`，WPF 在 `src/WpfDemo`。统一发布脚本默认拒绝覆盖已有输出目录；维护者核对同版本清单后可用 -Refresh 更新发布内容。
-
-## 目录与维护
+可选客户端用 `scripts/build.ps1 -IncludeWpf` 单独加编；旧 VM 结果插件用 `-WithVisionMaster`，仅供外部集成参考，不是当前相机直采的前提。开发网页服务用 `start.ps1`。
 
 ```text
-src/Core          场景、运动学、示教、成像任务、Modbus 协议
-src/Host          本地 HTTP/Modbus 服务
-src/Frontend      Three.js 场景界面
-src/Desktop       WPF/WebView2 仿真应用外壳
-src/WpfDemo       设备控制、采样、VM TCP 结果接收
-src/VirtualCamera 虚拟 GigE 相机
-src/VmDirectLink  VM 内结果发布组件（可选 SDK 构建）
-tests             核心、通信测试
-scripts           统一构建、测试、发布与界面回归
-samples           场景、C# 外部连接、VM 全局脚本模板
-docs              操作、协议、已确认需求与开发大纲
+src/Core           场景、机械臂、仪器运行、设备动作表、Modbus
+src/Host           HTTP/Modbus、仿真时钟、相机实例管理
+src/Frontend       AxisLab 三维场景、示教、工作单元、VM 相机入口
+src/Desktop        独立桌面应用
+src/VirtualCamera  GigE 适配器（Software / Line0）
+src/WpfDemo        可选外部上位机示例
+src/VmDirectLink   旧外部结果发布参考，不参与 AxisLab 运行
+tests              核心、通信、工作单元测试
+samples            场景与 C# 外部连接示例
 ```
 
-缓存、个人工程、编译产物、历史资料和厂商 SDK 不进入仓库。过时说明、旧 SDK 示例与历史验收已从当前发布内容中归档；旧版本源码另有本地备份。旧工程 schema 1—6 可导入并升级为 7，积木程序丢弃，设备与示教数据保留；请先备份原工程。
+工程保存格式为 schema 8，兼容导入 1—7；设备、仪器配置、相机触发绑定、示教点和动作表一起保存，运行中状态不会自动恢复。升级前保留原工程。缓存、个人工程、历史备份和厂商 SDK 不进入公开仓库。
 
-当前不包含传送带、光电触发、夹爪和完整自动抓放；这些列入 [后续开发大纲](docs/后续开发大纲.md)。它们不是本版已完成能力。
-
-项目未附开源许可；公开仓库不等于自动授予 MIT 等许可。第三方组件按其各自许可使用，厂商软件需独立授权。
+当前仿真采用理想输送和刚性夹持，光电按检测体积判断；不包含摩擦、惯性、落体与微秒级电气时序。多工件供料、多路 GigE、内部 VM 定位握手、空间标定向导见 [后续开发大纲](docs/后续开发大纲.md)。项目未附开源许可；第三方组件按各自许可使用。

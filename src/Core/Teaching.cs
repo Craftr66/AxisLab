@@ -32,7 +32,7 @@ public sealed partial class ProjectStore
         // Names and current robot joints do not affect calibration dependencies.
         var text = JsonSerializer.Serialize(new { d.Robot!.ModelId, d.Robot.Geometry, d.Robot.ToolTransform, d.Robot.WorkTransform,
             Basis = runtime.Devices.Single(f => f.DeviceId == robotId).World.Matrix,
-            Obstacles = project.Devices.Where(o => o.TypeId == "geometry.box" || o.Robot is not null && o.Id != robotId)
+            Obstacles = project.Devices.Where(o => o.TypeId is "geometry.box" or "mechanism.conveyor" || o.Robot is not null && o.Id != robotId)
                 .OrderBy(o => o.Id).Select(o => new { o.Id, o.Visible, o.ParentId, o.AttachmentFrameId, o.Transform, o.Parameters.SizeX, o.Parameters.SizeY, o.Parameters.SizeZ, o.Robot?.ModelId, o.Robot?.Geometry, o.Robot?.ToolTransform }) }, Catalog.Json);
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
     }
@@ -75,7 +75,7 @@ public sealed partial class ProjectStore
         {
             Check(expected); EnsureIdle();
             var point = project.TeachPoints!.FirstOrDefault(p => p.Id == id) ?? throw new DomainException("TeachPointNotFound", "示教点不存在。", 404);
-            if (action == "delete") return Commit(project with { TeachPoints = project.TeachPoints!.Where(p => p.Id != id).ToArray() });
+            if (action == "delete") return Commit(project with { TeachPoints = project.TeachPoints!.Where(p => p.Id != id).ToArray(),CellSequence=project.CellSequence?.Steps.Any(s=>s.PointId==id)==true?null:project.CellSequence });
             if (string.IsNullOrWhiteSpace(name)) throw new DomainException("InvalidTeachPoints", "示教点名称不能为空。");
             if (action is not ("rename" or "update" or "revalidate")) throw new DomainException("InvalidTeachAction", "示教操作无效。");
             var updated = point with { Name = name.Trim() };

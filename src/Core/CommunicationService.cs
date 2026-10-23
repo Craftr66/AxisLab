@@ -175,7 +175,7 @@ public sealed class CommunicationService(ProjectStore projects, CaptureService c
         var s = Refresh(); var a = new ushort[ModbusProtocol.RegisterCount];
         var d = c.SelectedSession == s.SessionId ? s.Project.Devices.FirstOrDefault(d => d.Id == c.DeviceId) : null;
         var robot = s.Runtime.Robots.FirstOrDefault(r => r.DeviceId == d?.Id);
-        a[0] = 0x4158; a[1] = 1; a[2] = 0x0200; a[3] = listening ? (ushort)1 : (ushort)0;
+        a[0] = 0x4158; a[1] = 1; a[2] = 0x0201; a[3] = listening ? (ushort)1 : (ushort)0;
         ModbusProtocol.Put64(a, 4, ModbusProtocol.SessionToken(s.SessionId)); ModbusProtocol.Put32(a, 8, ++snapshotSequence);
         a[10] = (ushort)s.Project.Devices.Length; a[11] = c.Number; a[12] = d is null ? (ushort)0 : ModbusProtocol.TypeCode(d);
         a[13] = (ushort)(robot?.Joints.Length ?? 0); a[14] = robot?.ControlOwnerId is null ? (ushort)0 : robot.ControlOwnerId == c.Owner ? (ushort)1 : (ushort)2;
@@ -193,7 +193,9 @@ public sealed class CommunicationService(ProjectStore projects, CaptureService c
             a[119] = (ushort)robot.StepIndex; a[120] = (ushort)robot.StepCount; a[121] = robot.MotionKind == "MoveL" ? (ushort)2 : robot.MotionKind == "MoveJ" ? (ushort)1 : (ushort)0;
             a[122] = ModbusProtocol.Error(robot.MotionErrorCode);
         }
-        a[123] = 1;
+        a[123] = 2;
+        a[124]=s.Runtime.Cell?.Status switch{"Running"=>1,"Completed"=>2,"Cancelled"=>3,"Failed"=>4,_=>(ushort)0};
+        a[125]=(ushort)(s.Runtime.Cell?.StepIndex??0);a[126]=(ushort)(s.Runtime.Cell?.StepCount??0);a[127]=ModbusProtocol.Error(s.Runtime.Cell?.ErrorCode);
         if (d is not null)
         {
             PoseAt(80, s.Runtime.Devices.Single(f => f.DeviceId == d.Id).World.Pose);
@@ -205,6 +207,8 @@ public sealed class CommunicationService(ProjectStore projects, CaptureService c
                 ModbusProtocol.PutFloat(a, 112, p.Cx); ModbusProtocol.PutFloat(a, 114, p.Cy); a[116] = (ushort)p.Width; a[117] = (ushort)p.Height;
             }
         }
+        var io=s.Runtime.Instruments?.FirstOrDefault(i=>i.DeviceId==d?.Id);
+        if(io is not null){a[108]=(ushort)((io.Running?1:0)|(io.Input?2:0)|(io.Closed?4:0)|(io.PartId.HasValue?8:0));ModbusProtocol.Put32(a,110,io.RisingEdges);ModbusProtocol.PutFloat(a,112,io.Speed);a[114]=(ushort)(s.Project.Devices.FirstOrDefault(p=>p.Id==io.PartId)?.DeviceNumber??0);}
         var page = s.Project.Devices.OrderBy(d => d.DeviceNumber).Skip(c.Page * 16).Take(16).ToArray();
         for (var i = 0; i < page.Length; i++)
         { var item = page[i]; var offset = 128 + i * 4; a[offset] = (ushort)item.DeviceNumber; a[offset + 1] = ModbusProtocol.TypeCode(item); a[offset + 2] = (ushort)(item.Robot?.JointPositions.Length ?? 0); a[offset + 3] = ModbusProtocol.Capabilities(item); }
@@ -252,6 +256,7 @@ public sealed class CommunicationService(ProjectStore projects, CaptureService c
             if (c.SelectedSession != s.SessionId || ModbusProtocol.U64(payload, 18) != ModbusProtocol.SessionToken(s.SessionId))
                 throw new DomainException("SessionChanged", "会话已变化，请重新选择设备并读取状态。");
             var cartesian = payload[0] is 7 or 8;
+            if(payload[0]>=10&&payload[2]!=0)throw new DomainException("InvalidParameters","I/O 和工作单元命令的轴数字段须为零。");
             if ((cartesian ? payload[1] > 5 : payload[1] != 0) || payload[3] != 0 || payload.Skip(payload[0] == 9 ? 25 : 24).Any(v => v != 0)) throw new DomainException("InvalidParameters", "标志或保留字段无效。");
             var config = ModbusProtocol.U32(payload, 22);
             if (payload[0] == 5)
@@ -288,6 +293,14 @@ public sealed class CommunicationService(ProjectStore projects, CaptureService c
                     case 9:
                         var teach = projects.PlayTeachNumber(device.Id, payload[24], ModbusProtocol.Float(payload,16), c.Owner);
                         job.CommandId = teach.Runtime.Robots.Single(r => r.DeviceId == device.Id).CommandId; job.State = 2; break;
+                    case 10:projects.SetConveyor(device.Id,ModbusProtocol.Float(payload,4),c.Owner);job.State=3;break;
+                    case 11:
+                        var close=ModbusProtocol.Float(payload,4);if(close is not (0 or 1))throw new DomainException("InvalidInstrument","夹爪值仅支持 0=开、1=闭。");
+                        projects.SetGripper(device.Id,close==1,c.Owner);job.State=3;break;
+                    case 12:
+                        if(projects.Get().Project.CellSequence?.RobotId!=device.Id)throw new DomainException("InvalidCellSequence","请选择流程对应的机器人。");
+                        projects.StartCell();job.State=3;break;
+                    case 13:projects.StopCell("Modbus 停止工作单元");job.State=3;break;
                     default: throw new DomainException("UnsupportedCommand", "不支持此操作码。");
                 }
                 return true;

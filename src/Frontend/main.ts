@@ -4,6 +4,8 @@ import { Viewport } from './viewport';
 import { RobotPanel } from './robot-panel';
 import { TeachingPanel } from './teaching-panel';
 import { CameraPanel } from './camera-panel';
+import {WorkcellPanel} from './workcell-panel';
+import {DirectCameraPanel} from './direct-camera-panel';
 import { startCaptureWorker } from './capture-worker';
 
 const $ = <T extends HTMLElement = HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
@@ -14,6 +16,8 @@ let robotPanel: RobotPanel;
 let teachingPanel: TeachingPanel;
 let activeTab = 'logs';
 let cameraPanel: CameraPanel;
+let workcellPanel:WorkcellPanel;
+let directCameraPanel:DirectCameraPanel;
 let runtime: RuntimeSnapshot;
 let activeRobotId: string | null = null;
 let formDirty = false;
@@ -107,21 +111,24 @@ function accept(value: Snapshot, preferId: string | null = selected) {
   viewport.select(selected);
   cameraPanel.setDevices(value.project.devices, value.sessionId, selected);
   renderTree(); renderProperties();
+  workcellPanel.setSnapshot(value); directCameraPanel.setDevices(value.project.devices,selected);
   updateRuntime(value.runtime);
-  if (value.project.devices.find(d => d.id === selected)?.robot) setTab(activeTab === 'teaching' ? 'teaching' : 'motion');
+  if (activeTab!=='cell'&&value.project.devices.find(d => d.id === selected)?.robot) setTab(activeTab === 'teaching' ? 'teaching' : 'motion');
     if (value.project.devices.find(d => d.id === selected)?.typeId === 'camera.pinhole') setTab('camera');
 }
 async function choose(id: string | null) {
   if (selected === id || !await discardForm()) return;
   selected = id; formDirty = false; viewport.select(id); renderTree(); renderProperties();
   cameraPanel.setDevices(snapshot.project.devices, snapshot.sessionId, id);
+  directCameraPanel.setDevices(snapshot.project.devices,id);
   updateRuntime(runtime);
   if (snapshot.project.devices.find(d => d.id === selected)?.robot) setTab('motion');
     if (snapshot.project.devices.find(d => d.id === selected)?.typeId === 'camera.pinhole') setTab('camera');
 }
 
-function setTab(tab: 'motion' | 'logs' | 'camera' | 'teaching') {
+function setTab(tab: 'motion' | 'logs' | 'camera' | 'teaching' | 'cell') {
   activeTab = tab;
+  $('#workcell-controls').classList.toggle('hidden',tab!=='cell'); $('#workcell-tab').classList.toggle('active',tab==='cell');
   $('#teaching-controls').classList.toggle('hidden', tab !== 'teaching');
   $('#teaching-tab').classList.toggle('active', tab === 'teaching');
   $('#robot-controls').classList.toggle('hidden', tab !== 'motion');
@@ -132,7 +139,7 @@ function setTab(tab: 'motion' | 'logs' | 'camera' | 'teaching') {
   $('#camera-tab').classList.toggle('active', tab === 'camera');
 }
 function updateRuntime(value: RuntimeSnapshot) {
-  runtime = value; snapshot.runtime=value; viewport.updateRuntime(value);
+  runtime = value; snapshot.runtime=value; viewport.updateRuntime(value);workcellPanel.update(value);
   const selectedDevice = snapshot.project.devices.find(d => d.id === selected);
   if (selectedDevice?.robot) activeRobotId = selectedDevice.id;
   const robot = snapshot.project.devices.find(d => d.id === activeRobotId);
@@ -142,9 +149,9 @@ function updateRuntime(value: RuntimeSnapshot) {
   const currentFrame = value.devices.find(d => d.deviceId === selected)?.world.pose;
   const readout = document.querySelector('#world-pose');
   if (readout && currentFrame) readout.textContent = `X ${currentFrame.x.toFixed(2)}  Y ${currentFrame.y.toFixed(2)}  Z ${currentFrame.z.toFixed(2)} mm`;
-  const moving = value.robots.some(r => r.status === 'Running' || r.controlOwnerId);
+  const moving = value.robots.some(r => r.status === 'Running' || r.controlOwnerId)||value.cell?.status==='Running'||!!value.instruments?.some(i=>i.running);
   document.querySelectorAll<HTMLButtonElement | HTMLInputElement | HTMLSelectElement>(
-    '.library button,[data-add],#new,#save,#open,#import,#export,#project-name,#property-form input,#property-form select,#property-form button,#aim-camera'
+    '.library button,[data-add],#load-cell-demo,#new,#save,#open,#import,#export,#project-name,#property-form input,#property-form select,#property-form button,#aim-camera'
   ).forEach(control => control.disabled = moving);
   ($('#stop-all') as HTMLButtonElement).disabled = !moving;
 }
@@ -188,7 +195,7 @@ const geometryFields: [keyof RobotGeometry, string, number][] = [
 function renderProperties() {
   const device = snapshot.project.devices.find(d => d.id === selected);
   if (!device) {
-    $('#properties-content').innerHTML = `<div class="props-empty">${icon('move')}<h2>选择一个场景对象</h2><p>点击场景或左侧对象树<br>查看和编辑设备属性</p></div><div class="props-status"><strong>阶段 7C2 · 工件定位</strong>圆点靶、九点标定板与 VM/WPF 九点采样；运动与通信继续可用。</div>`;
+    $('#properties-content').innerHTML = `<div class="props-empty">${icon('move')}<h2>选择一个场景对象</h2><p>点击场景或左侧对象树<br>查看和编辑设备属性</p></div><div class="props-status"><strong>AxisLab · 工作单元仿真</strong>添加传送带、夹爪、光电与工件，建立示教取放流程；虚拟相机直接连接 VM。</div>`;
     return;
   }
   const descendants = new Set([device.id]);
@@ -200,16 +207,20 @@ function renderProperties() {
   const p = device.parameters;
   const frames = device.robot ? `<div class="field-section"><div class="section-caption">工具 TCP · 相对法兰 F</div><div class="frame-fields">${(['x','y','z','rx','ry','rz'] as const).map(k=>numberField(k.toUpperCase()+(k.length===1?' mm':' deg'), 'tool-'+k, device.robot!.toolTransform[k], 'min="-10000" max="10000"')).join('')}</div><div class="section-caption">工件坐标 W · 相对基坐标</div><div class="frame-fields">${(['x','y','z','rx','ry','rz'] as const).map(k=>numberField(k.toUpperCase()+(k.length===1?' mm':' deg'), 'work-'+k, device.robot!.workTransform[k], 'min="-1000000" max="1000000"')).join('')}</div><small>修改后已有示教点须重新校验。</small></div>` : '';
   const currentGeometryFields = geometryFields.filter(([key]) => device.typeId !== 'robot.generic3r' || !['wrist1', 'wrist2', 'joint4Diameter', 'joint5Diameter', 'joint6Diameter'].includes(key));
+  const ioOptions=(type:string,id:string|null)=>'<option value="">不绑定</option>'+snapshot.project.devices.filter(d=>d.typeId===type).map(d=>`<option value="${d.id}" ${d.id===id?'selected':''}>${escape(d.name)}</option>`).join('');
+  const industrial=device.conveyor?`<div class="field-section"><div class="section-caption">传送带 · 沿局部 +X</div>${numberField('默认速度 mm/s','io-speed',device.conveyor.speed,'min=".1" max="1000"')}<small>物品位于带面时随传送带移动。</small></div>`:
+    device.gripper?`<div class="field-section"><div class="section-caption">平行夹爪</div>${numberField('捕获范围 mm','io-range',device.gripper.graspRange,'min=".1" max="100"')}<small>父对象选机器人，挂载坐标选 TCP。范围内的可抓取工件会随夹爪运动。</small></div>`:
+    device.photoelectric?`<div class="field-section"><div class="section-caption">光电 · 上升沿逻辑</div><label class="field"><span>触发相机</span><select name="io-camera">${ioOptions('camera.pinhole',device.photoelectric.cameraId)}</select></label><label class="field"><span>停带设备</span><select name="io-belt">${ioOptions('mechanism.conveyor',device.photoelectric.stopConveyorId)}</select></label><label><input type="checkbox" name="io-enabled" ${device.photoelectric.enabled?'checked':''}>启用检测</label></div>`:'';
   const labelForGeometry = (key: keyof RobotGeometry, label: string) => device.typeId !== 'robot.generic3r' ? label :
     key === 'forearm' ? '前臂 / J3→末端' : key === 'flangeLength' ? '末端→法兰' : label;
   const geometry = device.robot ? `<div class="field-section"><div class="section-caption">机械臂尺寸<span>mm</span></div><div class="field-pair">${currentGeometryFields.map(([key, label]) => numberField(labelForGeometry(key, label), key, device.robot!.geometry[key], key.includes('Diameter') ? 'min="10" max="500"' : `min="${key === 'baseHeight' ? 40 : 5}" max="3000"`)).join('')}</div><button class="btn outline" type="button" id="reset-geometry">恢复默认尺寸</button><p class="properties-note">${device.typeId === 'robot.generic3r' ? '通用 3R：底座 Z、肩 Y、肘 Y；前臂末端连接法兰，腕段参数不参与三轴模型。' : ''}连杆长度同步参与正运动学；直径用于外观。修改后重新校核工具与相机位姿，现有标定数据需要重做。</p></div>` : '';
   const params = device.typeId === 'camera.pinhole' ? `<div class="field-section"><div class="section-caption">相机内参<span>针孔模型</span></div><div class="field-pair">${numberField('图像宽度 / px', 'width', p.width, 'min="64" max="4096" step="1"')}${numberField('图像高度 / px', 'height', p.height, 'min="64" max="4096" step="1"')}${numberField('焦距 fx / px', 'fx', p.fx, 'min="0.001" max="100000"')}${numberField('焦距 fy / px', 'fy', p.fy, 'min="0.001" max="100000"')}${numberField('主点 cx / px', 'cx', p.cx, 'min="0"')}${numberField('主点 cy / px', 'cy', p.cy, 'min="0"')}</div><label class="field"><small>绿色视锥显示成像方向。修改分辨率时请同步调整主点与焦距。</small></label></div>` :
-    (device.typeId === 'geometry.box' || device.typeId.startsWith('vision.')) ? `<div class="field-section"><div class="section-caption">几何尺寸<span>mm</span></div>${numberField('X 方向', 'sizeX', p.sizeX, 'min="0.001" max="10000"')}${numberField('Y 方向', 'sizeY', p.sizeY, 'min="0.001" max="10000"')}${numberField('Z 方向', 'sizeZ', p.sizeZ, 'min="0.001" max="10000"')}</div>` : '';
+    (device.typeId === 'geometry.box' || device.typeId.startsWith('vision.')||['mechanism.conveyor','tool.gripper','sensor.photoelectric','material.workpiece'].includes(device.typeId)) ? `<div class="field-section"><div class="section-caption">几何尺寸<span>mm</span></div>${numberField('X 方向', 'sizeX', p.sizeX, 'min="0.001" max="10000"')}${numberField('Y 方向', 'sizeY', p.sizeY, 'min="0.001" max="10000"')}${numberField('Z 方向', 'sizeZ', p.sizeZ, 'min="0.001" max="10000"')}</div>` : '';
   $('#properties-content').innerHTML = `<div class="property-heading">${icon(kind(device.typeId))}<div><strong>${typeNames[device.typeId]}</strong><small>${escape(device.typeId)}</small></div></div>
     <form id="property-form"><div class="field-section"><label class="field"><span>对象名称</span><input name="name" value="${escape(device.name)}" maxlength="80" required></label><div class="id-row"><span>设备编号</span><span class="id-value">#${device.deviceNumber.toString().padStart(4, '0')}</span></div><div class="id-row"><span>稳定 ID</span><span class="id-value" title="${device.id}">${device.id.slice(0, 18)}…</span></div></div>
     <div class="field-section">${vector(['X', 'Y', 'Z'], ['x', 'y', 'z'], 'mm')}<div style="height:8px"></div>${vector(['Rx', 'Ry', 'Rz'], ['rx', 'ry', 'rz'], 'deg')}</div>
     <div class="field-section"><div class="section-caption">挂载关系${icon('link')}</div><label class="field"><span>父对象</span><select name="parentId"><option value="">世界坐标（独立安装）</option>${parentOptions.map(d => `<option value="${d.id}" ${device.parentId === d.id ? 'selected' : ''}>${escape(d.name)}</option>`).join('')}</select></label><label class="field"><span>挂载坐标</span><select name="attachmentFrameId"><option value="base">父对象基坐标</option><option value="flange">机器人法兰 F</option><option value="tool">机器人 TCP / 工具 T</option></select><small>更改挂载时保留局部数值；法兰和工具挂载随关节运动。</small></label></div>
-    ${params}${geometry}${frames}<div class="field-section"><label class="checkbox-label"><input type="checkbox" name="visible" ${device.visible ? 'checked' : ''}>在场景中显示</label><span class="properties-note">配置版本 ${device.configurationRevision}</span></div>
+    ${params}${industrial}${geometry}${frames}<div class="field-section"><label class="checkbox-label"><input type="checkbox" name="visible" ${device.visible ? 'checked' : ''}>在场景中显示</label><span class="properties-note">配置版本 ${device.configurationRevision}</span></div>
     <div class="props-actions"><button type="submit" class="btn primary">${icon('check')}应用属性</button><button type="button" class="btn outline" id="duplicate" title="仅复制此设备">${icon('copy')}复制</button><button type="button" class="btn danger" id="delete" aria-label="删除设备">${icon('trash')}</button></div></form>
     <p class="properties-note" id="property-hint">修改后点击“应用属性”。${device.typeId === 'camera.pinhole' ? '使用下方“相机画面”拍照、预览和保存。' : device.typeId === 'robot.generic6r' ? '使用下方“关节点动”操作六轴。支持路径预检和基础碰撞检测。' : ''}</p><div class="runtime-pose"><strong>对象原点 · 世界坐标</strong><span id="world-pose"></span></div>`;
   const form = $('#property-form') as HTMLFormElement;
@@ -239,6 +250,9 @@ function renderProperties() {
       updated.parentId = String(values.get('parentId')) || null;
       updated.attachmentFrameId = String(values.get('attachmentFrameId')) as Device['attachmentFrameId'];
       updated.visible = values.has('visible');
+      if(updated.conveyor)updated.conveyor={speed:Number(values.get('io-speed'))};
+      if(updated.gripper)updated.gripper={graspRange:Number(values.get('io-range'))};
+      if(updated.photoelectric)updated.photoelectric={cameraId:String(values.get('io-camera'))||null,stopConveyorId:String(values.get('io-belt'))||null,enabled:values.has('io-enabled')};
       for (const key of ['x', 'y', 'z', 'rx', 'ry', 'rz'] as const) updated.transform[key] = Number(values.get(key));
       for (const key of ['width', 'height', 'fx', 'fy', 'cx', 'cy', 'sizeX', 'sizeY', 'sizeZ'] as const) {
         if (values.has(key)) updated.parameters[key] = Number(values.get(key));
@@ -280,11 +294,13 @@ function download(name: string, text: string) {
 }
 
 function mount() {
-  $('#app').innerHTML = `<div class="shell"><header class="topbar"><div class="brand"><span class="brand-mark">A</span><span class="brand-name">AxisLab</span><span class="version">v2.0</span><span class="brand-caption">机械臂 · 视觉仿真</span></div><div class="project-heading">${icon('file')}<input id="project-name" value="未命名工程" maxlength="80" aria-label="工程名称"><span class="unsaved" id="unsaved"></span></div><div class="connection" id="connection"><span class="dot"></span><span>本地核心已连接</span></div></header>
-    <nav class="toolbar" aria-label="工程工具栏"><button class="btn" id="new">${icon('plus')}新建</button><button class="btn" id="open">${icon('folder')}打开</button><button class="btn primary" id="save">${icon('save')}保存工程</button><span class="separator"></span><button class="btn" id="import">${icon('upload')}导入</button><button class="btn" id="export">${icon('download')}导出 JSON</button><button class="btn danger" id="stop-all" disabled>停止运动</button><span class="toolbar-spacer"></span><button class="btn outline" id="external-connect">外部连接</button><span class="stage-chip">阶段 7C2 · 工件定位</span><span class="separator"></span><span class="mode"><span class="dot"></span>编辑模式</span><button class="tool-button" id="help" title="操作说明" aria-label="操作说明">${icon('info')}</button></nav>
-    <main class="workspace"><aside class="left-panel"><div class="panel-title">设备库<span class="label">DEVICE LIBRARY</span></div><div class="library">${[['robot.generic6r', '通用 6R · 关节点动 / FK'], ['robot.generic3r', '通用 3R · 底座 / 肩 / 肘'], ['camera.pinhole', '可独立安装或挂载'], ['geometry.box', '工作台 / 工件 / 障碍物'], ['vision.dotTarget', '单圆点 / 可挂载 TCP / 九点采样'], ['vision.dotGrid', '3×3 黑圆点 / 白底标定板'], ['vision.orientedPart', '大圆中心＋小圆方向 / 平面工件']].map(([type, description]) => `<button class="device-card ${kind(type)}" data-add="${type}" title="添加${typeNames[type]}"><span class="device-symbol">${icon(kind(type))}</span><span><strong>${typeNames[type]}</strong><small>${description}</small></span>${icon('plus')}</button>`).join('')}</div><div class="panel-title tree-header"><span>${icon('layers')} 场景对象</span><span id="device-count" class="tree-count">00</span></div><div class="tree" id="tree"></div><div class="left-foot">自由搭建你的仿真场景<br>设备编号与 ID 随工程稳定保存</div></aside>
-    <section class="center"><div class="viewport" id="viewport"><div class="viewport-breadcrumb">${icon('layers')}<strong>三维场景</strong><span>/</span><span>透视视图</span></div><div class="view-settings"><button class="tool-button active" id="translate" title="平移选中对象 (W)" aria-label="平移对象">${icon('move')}</button><button class="tool-button" id="rotate" title="旋转选中对象 (E)" aria-label="旋转对象">${icon('rotate')}</button><span class="separator"></span><button class="tool-button active" id="grid" title="切换网格" aria-label="切换网格">${icon('grid')}</button><button class="tool-button" id="focus" title="聚焦选中对象 (F)" aria-label="聚焦对象">${icon('eye')}</button><button class="tool-button" id="home" title="复位视角" aria-label="复位视角">${icon('home')}</button></div><div class="empty-scene" id="empty-scene">${icon('layers')}<h1>从一个空白场景开始</h1><p>添加机械臂、相机或几何体<br>搭建属于你的第一个仿真工作单元</p><div class="empty-actions"><button class="btn primary" data-add="robot.generic6r">${icon('plus')}添加机械臂</button><button class="btn outline" data-add="camera.pinhole">${icon('camera')}添加相机</button></div><div class="empty-foot">也可以从左侧设备库添加对象</div></div><div class="viewport-hint">左键旋转视角 · 右键平移 · 滚轮缩放 · 拖动坐标轴编辑对象</div><div class="axis-labels"><span>X</span><span>Y</span><span>Z</span></div><div class="viewport-meta"><span>GRID 100 mm</span><span id="fps">— FPS</span></div></div><div class="bottom-panel"><div class="bottom-tabs"><button class="bottom-tab-button" id="robot-tab">关节点动</button><button class="bottom-tab-button active" id="log-tab">事件日志</button><button class="bottom-tab-button" id="teaching-tab">运动与示教</button><button class="bottom-tab-button" id="camera-tab">相机画面</button><small id="revision">REV 001</small></div><div class="logs" id="logs"></div><div id="robot-controls" class="hidden"></div><div id="camera-controls" class="hidden"></div><div id="teaching-controls" class="hidden"></div></div></section>
+  $('#app').innerHTML = `<div class="shell"><header class="topbar"><div class="brand"><span class="brand-mark">A</span><span class="brand-name">AxisLab</span><span class="version">v2.1</span><span class="brand-caption">机械臂 · 视觉仿真</span></div><div class="project-heading">${icon('file')}<input id="project-name" value="未命名工程" maxlength="80" aria-label="工程名称"><span class="unsaved" id="unsaved"></span></div><div class="connection" id="connection"><span class="dot"></span><span>本地核心已连接</span></div></header>
+    <nav class="toolbar" aria-label="工程工具栏"><button class="btn" id="new">${icon('plus')}新建</button><button class="btn" id="open">${icon('folder')}打开</button><button class="btn primary" id="save">${icon('save')}保存工程</button><span class="separator"></span><button class="btn" id="import">${icon('upload')}导入</button><button class="btn" id="export">${icon('download')}导出 JSON</button><button class="btn outline" id="load-cell-demo">载入取放演示</button><button class="btn danger" id="stop-all" disabled>停止运动</button><span class="toolbar-spacer"></span><button class="btn outline" id="external-connect">外部连接</button><span class="stage-chip">AxisLab · 工作单元仿真</span><span class="separator"></span><span class="mode"><span class="dot"></span>编辑模式</span><button class="tool-button" id="help" title="操作说明" aria-label="操作说明">${icon('info')}</button></nav>
+    <main class="workspace"><aside class="left-panel"><div class="panel-title">设备库<span class="label">DEVICE LIBRARY</span></div><div class="library">${[['robot.generic6r', '通用 6R · 关节点动 / FK'], ['robot.generic3r', '通用 3R · 底座 / 肩 / 肘'], ['camera.pinhole', '可独立安装或挂载'], ['geometry.box', '工作台 / 工件 / 障碍物'], ['vision.dotTarget', '单圆点 / 可挂载 TCP / 九点采样'], ['vision.dotGrid', '3×3 黑圆点 / 白底标定板'], ['vision.orientedPart', '大圆中心＋小圆方向 / 平面工件'],['mechanism.conveyor','沿 X 输送 / 启停'],['tool.gripper','TCP 夹持 / 释放'],['sensor.photoelectric','遮挡 DI / 上升沿触发'],['material.workpiece','可输送 / 夹取 / 放置']].map(([type, description]) => `<button class="device-card ${kind(type)}" data-add="${type}" title="添加${typeNames[type]}"><span class="device-symbol">${icon(kind(type))}</span><span><strong>${typeNames[type]}</strong><small>${description}</small></span>${icon('plus')}</button>`).join('')}</div><div class="panel-title tree-header"><span>${icon('layers')} 场景对象</span><span id="device-count" class="tree-count">00</span></div><div class="tree" id="tree"></div><div class="left-foot">自由搭建你的仿真场景<br>设备编号与 ID 随工程稳定保存</div></aside>
+    <section class="center"><div class="viewport" id="viewport"><div class="viewport-breadcrumb">${icon('layers')}<strong>三维场景</strong><span>/</span><span>透视视图</span></div><div class="view-settings"><button class="tool-button active" id="translate" title="平移选中对象 (W)" aria-label="平移对象">${icon('move')}</button><button class="tool-button" id="rotate" title="旋转选中对象 (E)" aria-label="旋转对象">${icon('rotate')}</button><span class="separator"></span><button class="tool-button active" id="grid" title="切换网格" aria-label="切换网格">${icon('grid')}</button><button class="tool-button" id="focus" title="聚焦选中对象 (F)" aria-label="聚焦对象">${icon('eye')}</button><button class="tool-button" id="home" title="复位视角" aria-label="复位视角">${icon('home')}</button></div><div class="empty-scene" id="empty-scene">${icon('layers')}<h1>从一个空白场景开始</h1><p>添加机械臂、相机或几何体<br>搭建属于你的第一个仿真工作单元</p><div class="empty-actions"><button class="btn primary" data-add="robot.generic6r">${icon('plus')}添加机械臂</button><button class="btn outline" data-add="camera.pinhole">${icon('camera')}添加相机</button></div><div class="empty-foot">也可以从左侧设备库添加对象</div></div><div class="viewport-hint">左键旋转视角 · 右键平移 · 滚轮缩放 · 拖动坐标轴编辑对象</div><div class="axis-labels"><span>X</span><span>Y</span><span>Z</span></div><div class="viewport-meta"><span>GRID 100 mm</span><span id="fps">— FPS</span></div></div><div class="bottom-panel"><div class="bottom-tabs"><button class="bottom-tab-button" id="robot-tab">关节点动</button><button class="bottom-tab-button active" id="log-tab">事件日志</button><button class="bottom-tab-button" id="teaching-tab">运动与示教</button><button class="bottom-tab-button" id="camera-tab">相机 / VM 直采</button><button class="bottom-tab-button" id="workcell-tab">工作单元</button><small id="revision">REV 001</small></div><div class="logs" id="logs"></div><div id="robot-controls" class="hidden"></div><div id="camera-controls" class="hidden"><div id="camera-view-controls"></div><div id="virtual-camera-controls"></div></div><div id="workcell-controls" class="hidden"></div><div id="teaching-controls" class="hidden"></div></div></section>
     <aside class="properties"><div class="panel-title">对象属性<span class="label">PROPERTIES</span></div><div id="properties-content"></div></aside></main><footer class="statusbar"><span><span class="dot"></span>场景编辑就绪</span><span id="status-count">0 个对象</span><span>长度 mm · 角度 deg</span><span class="right">Modbus TCP / HTTP · 支持三轴与六轴</span></footer></div><dialog id="dialog"></dialog><div class="toast hidden" id="toast" role="status"></div><input type="file" id="import-file" accept=".json,application/json">`;
+  workcellPanel=new WorkcellPanel($('#workcell-controls'),(m,e)=>{toast(m,e);log(m,e);},async()=>accept(await api<Snapshot>('/v1/project')));
+  directCameraPanel=new DirectCameraPanel($('#virtual-camera-controls'),(m,e)=>{toast(m,e);log(m,e);});
   viewport = new Viewport($('#viewport'), id => void choose(id), (id, pose) => void perform(async () => {
     if (!await discardForm()) { viewport.setDevices(snapshot.project.devices, runtime); return; }
     const current = snapshot.project.devices.find(d => d.id === id);
@@ -349,7 +365,13 @@ function mount() {
     if (action) download('AxisLab-Modbus-v1.json', JSON.stringify(await api('/v1/communication/map'), null, 2));
   });
   $('#camera-tab').onclick = () => setTab('camera');
+  $('#workcell-tab').onclick = () => setTab('cell');
+  $('#load-cell-demo').onclick=()=>void perform(async()=>{
+    if(!await discardProject())return;
+    const project=await api<Project>('/v1/examples/workcell');accept(await api<Snapshot>('/v1/project/import','POST',{project,expectedRevision:snapshot.revision}),null);viewport.focusCell();setTab('cell');log('已载入光电停带示教取放演示。');
+  });
   $('#stop-all').onclick = async () => {
+    await api('/v1/cell/stop','POST');
     for (const robot of runtime.robots.filter(r => r.status === 'Running' || r.controlOwnerId)) await stopRobot(robot.deviceId);
   };
   const mode = (value: 'translate' | 'rotate') => {
@@ -378,7 +400,7 @@ try {
     if (formDirty) { toast('请先应用对象属性修改，再执行运动或示教。', true); return; }
     void perform(action);
   }, value => accept(value), id => void stopRobot(id));
-  cameraPanel = new CameraPanel($('#camera-controls'), id => void perform(async () => {
+  cameraPanel = new CameraPanel($('#camera-view-controls'), id => void perform(async () => {
     if (!await discardForm()) return;
     const camera = snapshot.project.devices.find(d => d.id === id);
     if (!camera) return;

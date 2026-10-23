@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -88,7 +88,7 @@ internal sealed class MainWindow : Window
         var help = new MenuItem { Header = "帮助" };
         help.Items.Add(Item("场景操作说明", () => ClickPageButton("help")));
         help.Items.Add(Item("关于 AxisLab", () => MessageBox.Show(this,
-            "AxisLab 2.0.0\n机械臂与视觉仿真平台\n\n虚拟相机 → VisionMaster 采图、标定与坐标转换 → WPF 通信与设备控制。\n支持三轴/六轴、尺寸编辑、运动、示教与虚拟成像。完整空间手眼、夹爪及传送带继续开发。",
+            "AxisLab 2.1.0\n机械臂与视觉仿真平台\n\nAxisLab 自身运行机械臂、传送带、夹爪、光电和示教取放流程；虚拟相机直接连接 VisionMaster。\n支持三轴/六轴、尺寸编辑、运动、示教与虚拟成像。外部可经 Modbus 读写设备；WPF 为可选客户端。",
             "关于 AxisLab", MessageBoxButton.OK, MessageBoxImage.Information)));
         menu.Items.Add(help);
         return menu;
@@ -117,7 +117,7 @@ internal sealed class MainWindow : Window
             Directory.CreateDirectory(DesktopPaths.Projects);
             if (!File.Exists(Path.Combine(AppContext.BaseDirectory, "wwwroot", "index.html")))
                 throw new FileNotFoundException("缺少界面资源。请保留完整发布文件夹，或重新解压发行包后启动。");
-            DesktopPaths.Log("Starting desktop 2.0.0");
+            DesktopPaths.Log("Starting desktop 2.1.0");
             server = SimulationHost.Build([], new(AppContext.BaseDirectory, DesktopPaths.Projects, $"http://{ModbusServer.ListenAddress}:0", Quiet: true));
             await server.StartAsync(lifetime.Token);
             var listenHost = ModbusServer.ListenAddress.ToString();

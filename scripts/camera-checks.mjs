@@ -114,7 +114,7 @@ try {
   const sampleFixed = sample.devices.find(d => d.typeId === 'camera.pinhole' && !d.parentId);
   const sampleHand = sample.devices.find(d => d.typeId === 'camera.pinhole' && d.parentId);
   await page.waitForSelector(`[data-device="${sampleFixed.id}"]`);
-  check('packaged scene opens with configured geometry and two cameras', state.project.schemaVersion === 7 && sample.devices.filter(d => d.typeId === 'camera.pinhole').length === 2 && state.project.devices.find(d => d.robot).robot.geometry.upperArm === 300);
+  check('packaged scene opens with configured geometry and two cameras', state.project.schemaVersion === 8 && sample.devices.filter(d => d.typeId === 'camera.pinhole').length === 2 && state.project.devices.find(d => d.robot).robot.geometry.upperArm === 300);
   const fixedPhoto = await expose(sampleFixed.id), handPhoto = await expose(sampleHand.id);
   await writeFile(path.join(output, 'sample-fixed.png'), fixedPhoto.png); await writeFile(path.join(output, 'sample-hand.png'), handPhoto.png);
   check('packaged fixed and flange cameras render their own views', fixedPhoto.meta.width === 800 && handPhoto.meta.width === 800 && fixedPhoto.meta.sha256 !== handPhoto.meta.sha256);

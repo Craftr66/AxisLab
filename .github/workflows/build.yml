@@ -20,7 +20,7 @@ jobs:
           corepack enable
           corepack prepare pnpm@10.20.0 --activate
           pnpm install --frozen-lockfile
-      - name: Build simulator and WPF without vendor SDK
+      - name: Build AxisLab without WPF or vendor SDK
         shell: powershell
         run: ./scripts/build.ps1
       - name: Core and communication checks

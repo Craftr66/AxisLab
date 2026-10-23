@@ -14,7 +14,8 @@ public record RobotState(Guid DeviceId, long PoseId, double[] Joints, string Sta
     CoordinateFrame? WorkWorld = null, string MotionKind = "Idle", int StepIndex = 0, int StepCount = 0,
     string? MotionMessage = null, string? MotionErrorCode = null, Guid? ActiveTeachPointId = null);
 public record DeviceFrame(Guid DeviceId, CoordinateFrame World);
-public record RuntimeSnapshot(Guid SessionId, long ProjectRevision, RobotState[] Robots, DeviceFrame[] Devices);
+public record RuntimeSnapshot(Guid SessionId, long ProjectRevision, RobotState[] Robots, DeviceFrame[] Devices,
+    IndustrialState[]? Instruments = null, CellRunState? Cell = null);
 
 /// <summary>Double precision, column-major rigid matrices; p_A = T_A_B * p_B.</summary>
 public sealed class RigidTransform

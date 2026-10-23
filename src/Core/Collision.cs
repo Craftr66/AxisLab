@@ -77,7 +77,7 @@ public static class Collision
             for (var j = i + 1; j < body.Length; j++)
                 if (Math.Abs(c.Link - body[j].Link) > 1 && Distance(c.A, c.B, body[j].A, body[j].B) < c.Radius + body[j].Radius + margin)
                     return $"机械臂自身连杆 {c.Link + 1} 与 {body[j].Link + 1} 干涉";
-            foreach (var obstacle in project.Devices.Where(d => d.Visible && d.TypeId == "geometry.box" && !AttachedTo(d, robotId)))
+            foreach (var obstacle in project.Devices.Where(d => d.Visible && d.TypeId is "geometry.box" or "mechanism.conveyor" && !AttachedTo(d, robotId)))
             {
                 var p = obstacle.Parameters;
                 if (HitsBox(c, new(runtime.Devices.Single(f => f.DeviceId == obstacle.Id).World.Matrix), new(p.SizeX / 2, p.SizeY / 2, p.SizeZ / 2), margin))

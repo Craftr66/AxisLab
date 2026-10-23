@@ -7,7 +7,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 
-const executable = path.resolve(process.env.AXISLAB_DESKTOP_EXE ?? 'dist/AxisLab-2.0.0-win-x64/Simulator/AxisLab.exe');
+const executable = path.resolve(process.env.AXISLAB_DESKTOP_EXE ?? 'dist/AxisLab-2.1.0-win-x64/AxisLab.exe');
 const expectSelfContained = !process.env.AXISLAB_DESKTOP_EXE || process.env.AXISLAB_EXPECT_SELF_CONTAINED === '1';
 const home = path.resolve('artifacts/desktop-checks', String(Date.now()));
 await mkdir(home, { recursive: true });
@@ -157,6 +157,27 @@ try {
   check('desktop connection dialog displays the actual Modbus port', (await page.locator('#dialog').textContent()).includes(String(communication.modbusPort)));
   await page.locator('#dialog-close').click();
   check('block editor removed while teaching remains available',await page.locator('#program-tab').count()===0);
+  await page.locator('#save').click();
+  await page.waitForFunction(() => document.querySelector('#unsaved')?.textContent === '已保存');
+  await page.locator('#load-cell-demo').click();
+  await page.waitForFunction(() => document.querySelectorAll('.cell-step-table tbody tr').length === 13);
+  check('standalone desktop loads the bundled taught pick/place scene', (await (await fetch(base + '/api/v1/project')).json()).project.cellSequence.steps.length === 13);
+  const optical = await exec('dotnet', [modbusCli, base, 'io', '4'], { windowsHide: true, timeout: 15000 });
+  check('C# reads desktop photoelectric DI over Modbus', optical.stdout.includes('IO flags=0 edges=0'));
+  const grip = await exec('dotnet', [modbusCli, base, 'grip', '5', 'open'], { windowsHide: true, timeout: 15000 });
+  check('C# commands the standalone gripper over Modbus', grip.stdout.includes('gripper updated'));
+  const belt = await exec('dotnet', [modbusCli, base, 'conveyor', '2', '20', '1'], { windowsHide: true, timeout: 15000 });
+  check('C# controls and stops the standalone conveyor over Modbus', belt.stdout.includes('conveyor stopped'));
+  const cycle = await exec('dotnet', [modbusCli, base, 'cell-start', '1'], { windowsHide: true, timeout: 15000 });
+  check('C# can request an internal cycle then disconnect', cycle.stdout.includes('internal cell flow started'));
+  const completedCell = await waitFor(async () => {
+    const r = await (await fetch(base + '/api/v1/runtime')).json();
+    if (r.cell.status === 'Failed') throw new Error(r.cell.message);
+    return r.cell.status === 'Completed' ? r : null;
+  }, 'autonomous desktop cell completion', 90000);
+  await writeFile(path.join(home, 'desktop-cell.json'), JSON.stringify(completedCell, null, 2));
+  await page.screenshot({ path: path.join(home, 'desktop-workcell.png') });
+  check('desktop completes optical-triggered pick/place without an external controller', completedCell.cell.status === 'Completed' && completedCell.instruments.every(s => !s.running));
   await page.locator('#save').click();
   await page.waitForFunction(() => document.querySelector('#unsaved')?.textContent === '已保存');
   const webgl = await page.locator('#viewport canvas').evaluate(el => {

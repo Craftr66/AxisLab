@@ -1,7 +1,7 @@
-{
+﻿{
   "name": "axislab-simulator",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.1.0",
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",

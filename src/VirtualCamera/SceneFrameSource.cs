@@ -8,7 +8,7 @@ using System.Windows.Media.Imaging;
 
 namespace AxisLab.VirtualCamera;
 
-sealed record CameraConfiguration(string ListenAddress,string AxisLabUrl,Guid CameraId,string StateDirectory);
+sealed record CameraConfiguration(string ListenAddress,string AxisLabUrl,Guid CameraId,string StateDirectory,int ControlPort=3956);
 sealed record CameraFrame(byte[] Pixels,JsonElement Metadata);
 
 sealed class SceneFrameSource : IDisposable
@@ -16,6 +16,7 @@ sealed class SceneFrameSource : IDisposable
     readonly HttpClient http;
     readonly Guid camera;
     readonly string directory;
+    long triggerCursor;
     public int Width {get;private set;}
     public int Height {get;private set;}
     public SceneFrameSource(CameraConfiguration config)
@@ -30,12 +31,33 @@ sealed class SceneFrameSource : IDisposable
         var item=devices.RootElement.EnumerateArray().Single(d=>d.GetProperty("id").GetGuid()==camera);
         if(!item.GetProperty("typeId").GetString()!.StartsWith("camera."))throw new ArgumentException("CameraId must identify an AxisLab camera.");
         var p=item.GetProperty("parameters");Width=p.GetProperty("width").GetInt32();Height=p.GetProperty("height").GetInt32();
+        using var events=JsonDocument.Parse(await http.GetStringAsync($"/api/v1/cameras/{camera}/triggers",ct));
+        triggerCursor=events.RootElement.EnumerateArray().Select(e=>e.GetProperty("sequence").GetInt64()).DefaultIfEmpty(0).Max();
     }
     public async Task<CameraFrame> Capture(CancellationToken ct)
     {
         using var deadline=CancellationTokenSource.CreateLinkedTokenSource(ct);deadline.CancelAfter(TimeSpan.FromSeconds(20));var token=deadline.Token;
         using var response=await http.PostAsync($"/api/v1/cameras/{camera}/captures",null,token);response.EnsureSuccessStatusCode();
         var state=await response.Content.ReadFromJsonAsync<JsonElement>(token);var capture=state.GetProperty("captureId").GetGuid();
+        return await Load(capture,state,token);
+    }
+    public async Task<CameraFrame?> Triggered(CancellationToken ct)
+    {
+        using var events=JsonDocument.Parse(await http.GetStringAsync($"/api/v1/cameras/{camera}/triggers?after={triggerCursor}",ct));
+        var items=events.RootElement.EnumerateArray().ToArray();if(items.Length==0)return null;
+        var item=items[0];var status=item.GetProperty("status").GetString();if(status=="Pending")return null;
+        triggerCursor=item.GetProperty("sequence").GetInt64();
+        if(status=="Failed")throw new IOException("Line0 capture failed: "+item.GetProperty("error").GetString());
+        var capture=item.GetProperty("captureId").GetGuid();var state=await http.GetFromJsonAsync<JsonElement>($"/api/v1/captures/{capture}",ct);
+        return await Load(capture,state,ct);
+    }
+    public async Task Arm(CancellationToken ct)
+    {
+        using var events=JsonDocument.Parse(await http.GetStringAsync($"/api/v1/cameras/{camera}/triggers",ct));
+        triggerCursor=events.RootElement.EnumerateArray().Select(e=>e.GetProperty("sequence").GetInt64()).DefaultIfEmpty(triggerCursor).Max();
+    }
+    async Task<CameraFrame> Load(Guid capture,JsonElement state,CancellationToken token)
+    {
         while(true) {
             var status=state.GetProperty("status").GetString();if(status=="Completed")break;if(status=="Failed")throw new IOException(state.ToString());
             await Task.Delay(30,token);state=await http.GetFromJsonAsync<JsonElement>($"/api/v1/captures/{capture}",token);

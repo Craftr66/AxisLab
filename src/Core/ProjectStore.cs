@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 
 namespace AxisLab.Core;
 
@@ -18,7 +18,7 @@ public sealed partial class ProjectStore
         Directory.CreateDirectory(this.directory);
     }
 
-    private static ProjectDocument Empty(string name) => new(7, Guid.NewGuid(), name, 1, [], []);
+    private static ProjectDocument Empty(string name) => new(8, Guid.NewGuid(), name, 1, [], []);
     private WorkspaceSnapshot Snapshot()
     {
         ExpireControls();
@@ -36,17 +36,21 @@ public sealed partial class ProjectStore
         Validate(candidate);
         project = candidate; revision++; dirty = true;
         ReconcileMotions(resetRuntime);
+        ReconcileIndustrial(resetRuntime);
         return Snapshot();
     }
 
     private static ProjectDocument Normalize(ProjectDocument doc)
     {
         if (doc is null) throw new DomainException("InvalidProject", "工程记录不能为空。");
-        if (doc.SchemaVersion is not (1 or 2 or 3 or 4 or 5 or 6 or 7)) throw new DomainException("UnsupportedSchema", "不支持此工程版本，当前可读取 v1—v7。");
+        if (doc.SchemaVersion is < 1 or > 8) throw new DomainException("UnsupportedSchema", "不支持此工程版本，当前可读取 v1—v8。");
         // Read the retired field only to migrate old scenes; never persist or execute it.
-        return doc with { SchemaVersion = 7, RetiredProgram=null, TeachPoints = doc.TeachPoints?.Select(p => p is null ? p! : p with { Joints = p.Joints is null ? null! : [.. p.Joints] }).ToArray() ?? [], Devices = doc.Devices?.Select(d => d is null ? d! : d with
+        return doc with { SchemaVersion = 8, RetiredProgram=null, CellSequence=doc.CellSequence is null ? null : doc.CellSequence with { Steps=doc.CellSequence.Steps is null?null!:[..doc.CellSequence.Steps] }, TeachPoints = doc.TeachPoints?.Select(p => p is null ? p! : p with { Joints = p.Joints is null ? null! : [.. p.Joints] }).ToArray() ?? [], Devices = doc.Devices?.Select(d => d is null ? d! : d with
         { Robot = RobotModels.IsRobot(d.TypeId) ? d.Robot is null ? RobotModels.Default(d.TypeId) : d.Robot with
-            { JointPositions = d.Robot.JointPositions is null ? null! : [.. d.Robot.JointPositions], Geometry = d.Robot.Geometry ?? new(), WorkTransform = d.Robot.WorkTransform ?? new() } : d.Robot }).ToArray()! };
+            { JointPositions = d.Robot.JointPositions is null ? null! : [.. d.Robot.JointPositions], Geometry = d.Robot.Geometry ?? new(), WorkTransform = d.Robot.WorkTransform ?? new() } : d.Robot,
+            Conveyor=d.TypeId=="mechanism.conveyor" ? d.Conveyor??new() : d.Conveyor,
+            Gripper=d.TypeId=="tool.gripper" ? d.Gripper??new() : d.Gripper,
+            Photoelectric=d.TypeId=="sensor.photoelectric" ? d.Photoelectric??new() : d.Photoelectric }).ToArray()! };
     }
 
     public WorkspaceSnapshot Add(string typeId, long expected)
@@ -63,6 +67,9 @@ public sealed partial class ProjectStore
                 "camera.pinhole" => new Pose(400 + (index - 1) * 180, -400, 700, 145, 0, 215),
                 "geometry.box" => new Pose(400, 200, 60),
                 "vision.dotTarget" or "vision.dotGrid" or "vision.orientedPart" => new Pose(400, 200, 100),
+                "mechanism.conveyor" => new Pose(450,0,180),
+                "sensor.photoelectric" => new Pose(500,0,225),
+                "material.workpiece" => new Pose(400,0,225),
                 _ when RobotModels.IsRobot(typeId) => new Pose(project.Devices.Count(d => d.Robot is not null) * 700, 0, 0),
                 _ => new Pose((index - 1) * 700, 0, 0)
             };
@@ -71,6 +78,10 @@ public sealed partial class ProjectStore
                 "vision.dotTarget" => new DeviceParameters(SizeX: 80, SizeY: 80, SizeZ: 2),
                 "vision.dotGrid" => new DeviceParameters(SizeX: 300, SizeY: 300, SizeZ: 2),
                 "vision.orientedPart" => new DeviceParameters(SizeX: 48, SizeY: 36, SizeZ: 4),
+                "mechanism.conveyor" => new DeviceParameters(SizeX: 700, SizeY: 160, SizeZ: 50),
+                "tool.gripper" => new DeviceParameters(SizeX: 80, SizeY: 60, SizeZ: 60),
+                "sensor.photoelectric" => new DeviceParameters(SizeX: 4, SizeY: 180, SizeZ: 30),
+                "material.workpiece" => new DeviceParameters(SizeX: 40, SizeY: 40, SizeZ: 40),
                 _ => new DeviceParameters()
             };
             var device = new Device(Guid.NewGuid(), typeId, $"{type.Name} {index}",
@@ -128,7 +139,8 @@ public sealed partial class ProjectStore
             } while (added);
             if (removed.Count > 1 && !cascade)
                 throw new DomainException("HasChildren", $"此设备下还挂载了 {removed.Count - 1} 个对象，请选择连同子对象删除或取消。", 409);
-            return Commit(project with { Devices = project.Devices.Where(d => !removed.Contains(d.Id)).ToArray(), TeachPoints = project.TeachPoints!.Where(p => !removed.Contains(p.RobotId)).ToArray() });
+            var devices=project.Devices.Where(d=>!removed.Contains(d.Id)).Select(d=>d.Photoelectric is null?d:d with{Photoelectric=d.Photoelectric with{CameraId=removed.Contains(d.Photoelectric.CameraId??Guid.Empty)?null:d.Photoelectric.CameraId,StopConveyorId=removed.Contains(d.Photoelectric.StopConveyorId??Guid.Empty)?null:d.Photoelectric.StopConveyorId}}).ToArray();
+            return Commit(project with { Devices = devices, TeachPoints = project.TeachPoints!.Where(p => !removed.Contains(p.RobotId)).ToArray(),CellSequence=null });
         }
     }
 
@@ -215,7 +227,7 @@ public sealed partial class ProjectStore
     public static void Validate(ProjectDocument doc)
     {
         if (doc is null) throw new DomainException("InvalidProject", "工程记录不能为空。");
-        if (doc.SchemaVersion != 7) throw new DomainException("UnsupportedSchema", "当前写入格式为 schemaVersion=7。");
+        if (doc.SchemaVersion != 8) throw new DomainException("UnsupportedSchema", "当前写入格式为 schemaVersion=8。");
         if (doc.Id == Guid.Empty || string.IsNullOrWhiteSpace(doc.Name) || doc.Name.Length > 80)
             throw new DomainException("InvalidProject", "工程 ID 无效或名称为空/超过 80 字。");
         if (doc.Devices is null || doc.Devices.Length > 128) throw new DomainException("InvalidDevices", "设备列表无效或超过当前版本的 128 个上限。");
@@ -261,5 +273,6 @@ public sealed partial class ProjectStore
             }
         }
         ValidateTeaching(doc);
+        ValidateIndustrial(doc);
     }
 }

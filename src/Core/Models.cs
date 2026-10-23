@@ -10,12 +10,13 @@ public record DeviceParameters(int Width = 640, int Height = 480,
 public record Device(Guid Id, string TypeId, string Name, int DeviceNumber,
     Guid? ParentId, Pose Transform, DeviceParameters Parameters,
     long ConfigurationRevision = 1, bool Visible = true,
-    string AttachmentFrameId = "base", RobotSettings? Robot = null);
+    string AttachmentFrameId = "base", RobotSettings? Robot = null,
+    ConveyorSettings? Conveyor = null, GripperSettings? Gripper = null, PhotoelectricSettings? Photoelectric = null);
 public record ProjectDocument(int SchemaVersion, Guid Id, string Name,
     int NextDeviceNumber, Device[] Devices, TeachPoint[]? TeachPoints = null, int NextTeachPointNumber = 1,
     [property:System.Text.Json.Serialization.JsonPropertyName("program")]
     [property:System.Text.Json.Serialization.JsonIgnore(Condition=System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
-    JsonElement? RetiredProgram = null);
+    JsonElement? RetiredProgram = null, CellSequence? CellSequence = null);
 public record WorkspaceSnapshot(Guid SessionId, long Revision, bool Dirty,
     ProjectDocument Project, bool HasSavedFile, RuntimeSnapshot Runtime, TeachPointView[]? Teaching = null);
 public record DeviceType(string TypeId, string Name, string Description, string[] Capabilities);
@@ -29,7 +30,11 @@ public static class Catalog
         new("geometry.box", "长方体", "工作台、工件与场景障碍物", ["Configure"]),
         new("vision.dotTarget", "圆点标定靶", "单圆点 · 可挂载 TCP · 平面采样", ["Configure", "Mount"]),
         new("vision.dotGrid", "九点标定板", "3×3 黑圆点 · 白底 · 平面视觉练习", ["Configure", "Mount"]),
-        new("vision.orientedPart", "方向工件", "大圆中心＋小圆方向 · XY/角度定位", ["Configure", "Mount"])
+        new("vision.orientedPart", "方向工件", "大圆中心＋小圆方向 · XY/角度定位", ["Configure", "Mount"]),
+        new("mechanism.conveyor", "传送带", "沿局部 X 输送 · 启停与 Modbus", ["Configure", "DigitalOutput", "Transport"]),
+        new("tool.gripper", "平行夹爪", "挂载 TCP · 夹取/释放工件", ["Configure", "Mount", "DigitalOutput", "Grip"]),
+        new("sensor.photoelectric", "光电传感器", "遮挡信号 · 上升沿停带/相机触发", ["Configure", "DigitalInput", "Trigger"]),
+        new("material.workpiece", "可抓取工件", "可输送、夹持与放置", ["Configure", "Mount", "Transport"])
     ];
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     { WriteIndented = true, MaxDepth = 2048, UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow };

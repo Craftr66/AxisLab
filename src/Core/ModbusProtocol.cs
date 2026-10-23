@@ -8,8 +8,8 @@ public static class ModbusProtocol
 {
     public const int RegisterCount = 234;
     public const int SelectDevice = 200, DiscoveryPage = 201, BankStart = 202, Heartbeat = 230, Submit = 232;
-    public static ushort TypeCode(Device d) => d.TypeId switch { "robot.generic6r" => 1, "robot.generic3r" => 2, "camera.pinhole" => 10, "vision.dotTarget" => 21, "vision.dotGrid" => 22, "vision.orientedPart" => 23, _ => 20 };
-    public static ushort Capabilities(Device d) => d.Robot is not null ? (ushort)927 : d.TypeId == "camera.pinhole" ? (ushort)97 : (ushort)1;
+    public static ushort TypeCode(Device d) => d.TypeId switch { "robot.generic6r" => 1, "robot.generic3r" => 2, "camera.pinhole" => 10, "vision.dotTarget" => 21, "vision.dotGrid" => 22, "vision.orientedPart" => 23,"mechanism.conveyor"=>30,"tool.gripper"=>31,"sensor.photoelectric"=>32,"material.workpiece"=>33, _ => 20 };
+    public static ushort Capabilities(Device d) => d.Robot is not null ? (ushort)927 : d.TypeId == "camera.pinhole" ? (ushort)97 : d.Photoelectric is not null?(ushort)1025:d.Conveyor is not null||d.Gripper is not null?(ushort)2049:(ushort)1;
     public static ulong SessionToken(Guid id) => ulong.Parse(id.ToString("N")[..16], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
     public static uint U32(ushort[] a, int i) => ((uint)a[i] << 16) | a[i + 1];
     public static ulong U64(ushort[] a, int i) => ((ulong)U32(a, i) << 32) | U32(a, i + 2);
@@ -36,7 +36,7 @@ public static class ModbusProtocol
         ["RenderFailed"] = 27, ["InvalidPng"] = 28, ["CaptureNotFound"] = 29,
         ["IkUnreachable"] = 30, ["CollisionDetected"] = 31, ["SingularPath"] = 32, ["PlanningLimit"] = 33,
         ["StaleTeachPoint"] = 34, ["TeachPointNotFound"] = 35, ["InvalidPose"] = 36, ["InvalidFrame"] = 37,
-        ["UnsupportedPose"] = 38, ["MountedRobotUnsupported"] = 39, ["InternalError"] = 255
+        ["UnsupportedPose"] = 38, ["MountedRobotUnsupported"] = 39,["CellActive"]=41,["InvalidInstrument"]=42,["InvalidCellSequence"]=43,["CellTimeout"]=44,["GripEmpty"]=45,["CellCancelled"]=46, ["InternalError"] = 255
     };
     public static ushort Error(string? code) => code is null ? (ushort)0 : Errors.GetValueOrDefault(code, (ushort)255);
     public static object Describe() => new
@@ -44,13 +44,18 @@ public static class ModbusProtocol
         protocol = "AxisLab Modbus TCP v1", version = 1, unitId = 1, defaultPort = 1502,
         addressMode = "zero-based PDU", byteOrder = "big-endian", wordOrder = "high-word-first ABCD",
         functions = new[] { 3, 6, 16 }, heartbeatMilliseconds = 5000,
-        extension = 1, commands = new { acquire = 1, release = 2, moveJ = 3, stop = 4, capture = 5, cancelCapture = 6, movePose = 7, moveL = 8, teachPoint = 9 },
+        extension = 2, commands = new { acquire = 1, release = 2, moveJ = 3, stop = 4, capture = 5, cancelCapture = 6, movePose = 7, moveL = 8, teachPoint = 9,setConveyor=10,setGripper=11,startCell=12,stopCell=13 },
         states = new { idle = 0, accepted = 1, running = 2, completed = 3, failed = 4, cancelled = 5, rejected = 6 },
-        deviceTypes = new { robot6r = 1, robot3r = 2, camera = 10, box = 20, dotTarget = 21, dotGrid = 22, orientedPart = 23 },
+        deviceTypes = new { robot6r = 1, robot3r = 2, camera = 10, box = 20, dotTarget = 21, dotGrid = 22, orientedPart = 23,conveyor=30,gripper=31,photoelectric=32,workpiece=33 },
         errors = Errors,
+        instrumentRegisters = new[] {
+            new { address=108,count=1,access="R",name="Selected instrument flags:bit0 belt running,bit1 photoelectric input,bit2 gripper closed,bit3 associated part" },
+            new { address=110,count=2,access="R",name="Photoelectric rising edge count UInt32" },
+            new { address=112,count=2,access="R",name="Conveyor speed mm/s Float32" },
+            new { address=114,count=1,access="R",name="Associated workpiece device number,0 none" } },
         registers = new object[] {
             new { address=0, count=1, access="R", name="Magic 0x4158" }, new { address=1, count=1, access="R", name="Protocol version 1" },
-            new { address=2, count=1, access="R", name="Application 0x0200" }, new { address=3, count=1, access="R", name="Modbus listening flag" },
+            new { address=2, count=1, access="R", name="Application 0x0201" }, new { address=3, count=1, access="R", name="Modbus listening flag" },
             new { address=4, count=4, access="R", name="Project session token UInt64" }, new { address=8, count=2, access="R", name="Read snapshot sequence UInt32" },
             new { address=10, count=1, access="R", name="Device count" }, new { address=11, count=1, access="R", name="Selected device number" },
             new { address=12, count=1, access="R", name="Device type" }, new { address=13, count=1, access="R", name="Axis count" },
@@ -71,12 +76,12 @@ public static class ModbusProtocol
             new { address=118, count=1, access="R", name="Control heartbeat remaining milliseconds" },
             new { address=119, count=1, access="R", name="Current step 1-based" }, new { address=120, count=1, access="R", name="Total steps" },
             new { address=121, count=1, access="R", name="Motion kind 0 idle,1 MoveJ,2 MoveL" }, new { address=122, count=1, access="R", name="Motion error" },
-            new { address=123, count=1, access="R", name="v1 extension level 1" }, new { address=124, count=4, access="R", name="Reserved zero" },
+            new { address=123, count=1, access="R", name="v1 extension level 2" }, new { address=124, count=4, access="R", name="Cell status 0idle/1running/2completed/3cancelled/4failed,step,total,error" },
             new { address=128, count=64, access="R", name="Discovery page: 16 rows of number/type/axes/capabilities" }, new { address=192, count=8, access="R", name="Reserved zero" },
             new { address=200, count=1, access="RW", name="Select stable device number; FC06 or FC16(count=1)" }, new { address=201, count=1, access="RW", name="Discovery page zero-based; FC06 or FC16(count=1)" },
             new { address=202, count=1, access="RW", name="Staged opcode" }, new { address=203, count=1, access="RW", name="Opcode7/8: bit0 position-only, bits1..2 frame 0base/1world/2work; other opcodes zero" },
             new { address=204, count=1, access="RW", name="Target joint count 3 or 6 for MoveJ" }, new { address=205, count=1, access="RW", name="Reserved zero" },
-            new { address=206, count=12, access="RW", name="Opcode3: J1..J6 Float32 unused axes zero; opcode7/8: XYZRxRyRz Float32" }, new { address=218, count=2, access="RW", name="Speed percent Float32" },
+            new { address=206, count=12, access="RW", name="Opcode3:J1..J6;7/8:XYZRxRyRz;10:first Float32 conveyor mm/s,0stop;11:first Float32 0open/1close" }, new { address=218, count=2, access="RW", name="Speed percent Float32" },
             new { address=220, count=4, access="RW", name="Expected project session UInt64" }, new { address=224, count=2, access="RW", name="Expected configuration revision UInt32" },
             new { address=226, count=1, access="RW", name="Opcode9 teach point number; otherwise zero" }, new { address=227, count=3, access="RW", name="Reserved zero" }, new { address=230, count=2, access="RW", name="Heartbeat UInt32; FC16 exact pair, must change" },
             new { address=232, count=2, access="W", name="Submit sequence UInt32; FC16 exact pair, write last" }

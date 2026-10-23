@@ -1,4 +1,4 @@
-import { escape, icon } from './icons';
+﻿import { escape, icon } from './icons';
 import type { CaptureState, Device, FrameMetadata } from './types';
 
 async function request<T>(path: string, method = 'GET'): Promise<T> {
@@ -85,7 +85,7 @@ export class CameraPanel {
   private draw() {
     const camera = this.devices.find(d => d.id === this.cameraId);
     const preview = this.cameraId ? this.previews.get(this.cameraId) : null;
-    this.element.innerHTML = `<div class="camera-panel"><div class="camera-preview">${preview ? `<img id="camera-image" src="${preview.url}" alt="${escape(camera?.name ?? '')}的仿真照片">` : `<span>${icon('camera')}<br>${camera ? '点击拍照，生成此相机的实际视野' : '先从设备库添加一台相机'}</span>`}</div><div class="camera-tools"><div class="camera-toolbar"><select id="capture-camera" aria-label="拍照相机">${this.devices.map(d => `<option value="${d.id}" ${d.id === this.cameraId ? 'selected' : ''}>${escape(d.name)} · #${d.deviceNumber}</option>`).join('')}</select><button class="btn primary" id="capture-camera-now" ${!camera || this.busy.has(camera.id) ? 'disabled' : ''}>${icon('camera')}拍照</button><button class="btn outline" id="aim-camera" ${!camera ? 'disabled' : ''}>朝向机械臂</button></div><div class="camera-toolbar"><button class="btn outline" id="save-camera-image" ${!preview ? 'disabled' : ''}>保存 PNG</button><button class="btn outline" id="save-frame-metadata" ${!preview ? 'disabled' : ''}>导出帧信息</button><small id="renderer-state">${escape(this.service)}</small></div><div id="capture-status" role="status">${escape((this.cameraId && this.messages.get(this.cameraId)) || '支持界面拍照与外部 HTTP 触发；相机坐标 +X 向右、+Y 向下、+Z 向前。')}</div><div class="frame-details">${preview ? `${preview.metadata.width} × ${preview.metadata.height} px · PNG · ${new Date(preview.metadata.exposureAt).toLocaleTimeString('zh-CN', { hour12: false })}<br>Frame ${preview.metadata.frameId}<br>曝光姿态 ${preview.metadata.robots.map(r => 'Pose ' + r.poseId).join(' / ') || '无机械臂'} · 配置 v${preview.metadata.cameraConfigurationRevision}` : '拍照包含可见设备和地面；编辑坐标轴与辅助网格不进入照片。'}</div></div></div>`;
+    this.element.innerHTML = `<div class="camera-panel"><div class="camera-preview">${preview ? `<img id="camera-image" src="${preview.url}" alt="${escape(camera?.name ?? '')}的仿真照片">` : `<span>${icon('camera')}<br>${camera ? '点击拍照，生成此相机的实际视野' : '先从设备库添加一台相机'}</span>`}</div><div class="camera-tools"><div class="camera-toolbar"><select id="capture-camera" aria-label="拍照相机">${this.devices.map(d => `<option value="${d.id}" ${d.id === this.cameraId ? 'selected' : ''}>${escape(d.name)} · #${d.deviceNumber}</option>`).join('')}</select><button class="btn primary" id="capture-camera-now" ${!camera || this.busy.has(camera.id) ? 'disabled' : ''}>${icon('camera')}拍照</button><button class="btn outline" id="aim-camera" ${!camera ? 'disabled' : ''}>朝向机械臂</button></div><div class="camera-toolbar"><button class="btn outline" id="save-camera-image" ${!preview ? 'disabled' : ''}>保存 PNG</button><button class="btn outline" id="save-frame-metadata" ${!preview ? 'disabled' : ''}>导出帧信息</button><button class="btn outline" id="save-calibration-observation" ${!preview ? 'disabled' : ''}>导出标定观测</button><small id="renderer-state">${escape(this.service)}</small></div><div id="capture-status" role="status">${escape((this.cameraId && this.messages.get(this.cameraId)) || '支持界面拍照与外部 HTTP 触发；相机坐标 +X 向右、+Y 向下、+Z 向前。')}</div><div class="frame-details">${preview ? `${preview.metadata.width} × ${preview.metadata.height} px · PNG · ${new Date(preview.metadata.exposureAt).toLocaleTimeString('zh-CN', { hour12: false })}<br>Frame ${preview.metadata.frameId}<br>曝光姿态 ${preview.metadata.robots.map(r => 'Pose ' + r.poseId).join(' / ') || '无机械臂'} · 配置 v${preview.metadata.cameraConfigurationRevision}` : '拍照包含可见设备和地面；编辑坐标轴与辅助网格不进入照片。'}</div></div></div>`;
     this.element.querySelector<HTMLSelectElement>('#capture-camera')!.onchange = e => {
       this.cameraId = (e.target as HTMLSelectElement).value; this.draw();
     };
@@ -98,6 +98,12 @@ export class CameraPanel {
       if (!preview) return;
       const url = URL.createObjectURL(new Blob([JSON.stringify(preview.metadata, null, 2)], { type: 'application/json' }));
       this.save(url, `${preview.metadata.frameId}.frame.json`); setTimeout(() => URL.revokeObjectURL(url), 1000);
+    };
+    this.element.querySelector<HTMLButtonElement>('#save-calibration-observation')!.onclick=()=>{
+      if(!preview)return;const m=preview.metadata;
+      const observation={schema:1,frameId:m.frameId,cameraId:m.cameraId,cameraConfigurationRevision:m.cameraConfigurationRevision,sessionId:m.sessionId,sceneRevision:m.sceneRevision,sha256:m.sha256,width:m.width,height:m.height,exposureAt:m.exposureAt,
+        robots:m.robots.map(r=>({deviceId:r.deviceId,poseId:r.poseId,joints:r.joints,flangeBase:r.flangeBase,tcpBase:r.tcpBase}))};
+      const url=URL.createObjectURL(new Blob([JSON.stringify(observation,null,2)],{type:'application/json'}));this.save(url,m.frameId+'.observation.json');setTimeout(()=>URL.revokeObjectURL(url),1000);
     };
   }
 }

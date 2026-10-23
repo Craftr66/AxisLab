@@ -14,6 +14,7 @@ public sealed partial class ProjectStore
         ? Math.Max(0, 5000 - (int)controlClock.GetElapsedTime(c.Heartbeat).TotalMilliseconds) : 0;
     private void ExpireControls()
     {
+        foreach(var state in instruments.Values.Where(s=>s.Owner.HasValue&&controlClock.GetElapsedTime(s.Heartbeat).TotalMilliseconds>=5000)){state.Speed=0;state.Owner=null;}
         foreach (var id in controls.Keys.Where(id => ControlRemaining(id) == 0).ToArray())
         {
             controls.Remove(id);
@@ -53,6 +54,7 @@ public sealed partial class ProjectStore
             ExpireControls();
             foreach (var c in controls.Values.Where(c => c.Owner == owner && c.Counter != counter))
             { c.Counter = counter; c.Heartbeat = controlClock.GetTimestamp(); }
+            foreach(var state in instruments.Values.Where(s=>s.Owner==owner&&s.Counter!=counter)){state.Counter=counter;state.Heartbeat=controlClock.GetTimestamp();}
         }
     }
     public void ReleaseRobot(Guid id, Guid owner)
@@ -66,6 +68,6 @@ public sealed partial class ProjectStore
     }
     public void DisconnectOwner(Guid owner)
     {
-        lock (gate) foreach (var id in controls.Where(p => p.Value.Owner == owner).Select(p => p.Key).ToArray()) StopRobot(id);
+        lock (gate){foreach(var state in instruments.Values.Where(s=>s.Owner==owner)){state.Speed=0;state.Owner=null;}foreach (var id in controls.Where(p => p.Value.Owner == owner).Select(p => p.Key).ToArray()) StopRobot(id);}
     }
 }

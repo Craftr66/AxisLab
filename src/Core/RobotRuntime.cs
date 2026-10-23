@@ -16,9 +16,10 @@ public sealed partial class ProjectStore
         public string? ErrorCode;
     }
     private readonly Dictionary<Guid, Motion> motions = [];
-    public bool HasActiveMotion { get { lock (gate) return motions.Values.Any(m => m.Status == "Running"); } }
+    public bool HasActiveMotion { get { lock (gate) return motions.Values.Any(m => m.Status == "Running")||flowStatus=="Running"||instruments.Values.Any(s=>s.Speed!=0); } }
     private void EnsureIdle()
     {
+        EnsureIndustrialIdle();
         ExpireControls();
         if (motions.Values.Any(m => m.Status == "Running"))
             throw new DomainException("MotionActive", "机械臂正在运动，请先停止后再编辑、保存或切换工程。", 409);
@@ -33,8 +34,9 @@ public sealed partial class ProjectStore
     }
     private ProjectDocument WithJointPositions() => project with
     {
+        CellSequence=project.CellSequence is null?null:project.CellSequence with{Steps=[..project.CellSequence.Steps]},
         TeachPoints = project.TeachPoints!.Select(p => p with { Joints = [.. p.Joints] }).ToArray(),
-        Devices = project.Devices.Select(d => d.Robot is null ? d : d with
+        Devices = project.Devices.Select(d => d.Robot is null ? PersistPart(d) : d with
         { Robot = d.Robot with { JointPositions = [.. motions[d.Id].Joints] } }).ToArray()
     };
     public WorkspaceSnapshot MoveJoints(Guid id, double[] target, double speedPercent, long expected, Guid? controller = null)
@@ -51,6 +53,7 @@ public sealed partial class ProjectStore
         lock (gate)
         {
             Find(id);
+            if(flowStatus=="Running"&&project.CellSequence?.RobotId==id)StopCell("机器人停止，取放流程已取消。");
             if (!motions.TryGetValue(id, out var motion)) throw new DomainException("NotRobot", "此设备不是机械臂。");
             controls.Remove(id);
             if (motion.Status == "Running") { motion.Status = "Cancelled"; revision++; dirty = true; }
@@ -61,6 +64,7 @@ public sealed partial class ProjectStore
     {
         lock (gate)
         {
+            StopCell();
             controls.Clear();
             var active = motions.Values.Where(m => m.Status == "Running").ToArray();
             foreach (var motion in active) motion.Status = "Cancelled";
@@ -124,6 +128,8 @@ public sealed partial class ProjectStore
         RigidTransform World(Device d)
         {
             if (world.TryGetValue(d.Id, out var cached)) return cached;
+            if(held.TryGetValue(d.Id,out var grip))return world[d.Id]=World(byId[grip.Gripper]).Then(grip.Relative);
+            if(partWorld.TryGetValue(d.Id,out var position))return world[d.Id]=position;
             var parent = d.ParentId.HasValue ? World(byId[d.ParentId.Value]) : RigidTransform.Identity;
             if (d.ParentId.HasValue && d.AttachmentFrameId != "base")
             {
@@ -143,6 +149,6 @@ public sealed partial class ProjectStore
                     controls.GetValueOrDefault(pair.Key)?.Owner, ControlRemaining(pair.Key),
                     basis.Then(RigidTransform.FromPose(Find(pair.Key).Robot!.WorkTransform ?? new())).Frame(), path?.Kind ?? "Idle",
                     path is null ? 0 : m.PathIndex+1, m.Paths.Length, m.Message, m.ErrorCode, path?.TeachPointId);
-            }).ToArray(), project.Devices.Select(d => new DeviceFrame(d.Id, world[d.Id].Frame())).ToArray());
+            }).ToArray(), project.Devices.Select(d => new DeviceFrame(d.Id, world[d.Id].Frame())).ToArray(),InstrumentSnapshot(),CellSnapshot());
     }
 }

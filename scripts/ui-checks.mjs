@@ -1,4 +1,4 @@
-﻿import { chromium } from 'playwright';
+import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 
@@ -158,7 +158,7 @@ try {
   }) };
   const legacyResponse = await page.request.post(base + '/api/v1/project/import', { data: { project: legacyProject, expectedRevision: motionSaved.revision } });
   const migrated = await legacyResponse.json();
-  check('legacy project migrates through HTTP with stable identities', legacyResponse.ok() && migrated.project.schemaVersion === 7 && migrated.project.devices.map(d => d.id).join() === motionSaved.project.devices.map(d => d.id).join());
+  check('legacy project migrates through HTTP with stable identities', legacyResponse.ok() && migrated.project.schemaVersion === 8 && migrated.project.devices.map(d => d.id).join() === motionSaved.project.devices.map(d => d.id).join());
   // Restore a flange-mounted example after the migration regression check.
   await page.request.post(base + '/api/v1/project/import', { data: { project: motionSaved.project, expectedRevision: migrated.revision } });
   await page.waitForTimeout(500);

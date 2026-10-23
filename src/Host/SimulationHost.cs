@@ -27,6 +27,8 @@ public static class SimulationHost
         builder.Services.AddHostedService<MotionClock>();
         builder.Services.AddSingleton(sp => new CaptureService(sp.GetRequiredService<ProjectStore>()));
         builder.Services.AddSingleton<CommunicationService>();
+        builder.Services.AddSingleton<VirtualCameraService>();
+        builder.Services.AddHostedService(sp=>sp.GetRequiredService<VirtualCameraService>());
         builder.Services.AddHostedService<ModbusServer>();
         builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = 2 * 1024 * 1024);
         var app = builder.Build();
@@ -51,7 +53,7 @@ public static class SimulationHost
         });
         app.UseDefaultFiles();
         app.UseStaticFiles();
-        app.MapGet("/api/health", () => new { status = "ok", version = "2.0.0", mode = "vm-direct" });
+        app.MapGet("/api/health", () => new { status = "ok", version = "2.1.0", mode = "workcell" });
         app.MapGet("/api/v1/communication", (CommunicationService bridge) => bridge.Status());
         app.MapGet("/api/v1/communication/map", () => ModbusProtocol.Describe());
         app.MapGet("/api/v1/communication/frames/{sessionToken}/{frameToken:long}", (string sessionToken, long frameToken, CommunicationService bridge) =>
@@ -65,10 +67,26 @@ public static class SimulationHost
             return bridge.Command((uint)clientId, (uint)sequence);
         });
         app.MapGet("/api/v1/device-types", () => Catalog.Types);
+        app.MapGet("/api/v1/examples/workcell",()=>{
+            var paths=new[]{Path.Combine(AppContext.BaseDirectory,"Samples","workcell-pick-place.scene.json"),Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath,"../../samples/workcell-pick-place.scene.json"))};
+            var file=paths.FirstOrDefault(File.Exists)??throw new DomainException("ProjectNotFound","发布包中缺少取放演示工程。",404);
+            return System.Text.Json.JsonSerializer.Deserialize<ProjectDocument>(File.ReadAllText(file),Catalog.Json);
+        });
         app.MapGet("/api/v1/project", (ProjectStore store) => store.Get());
         app.MapGet("/api/v1/devices", (ProjectStore store) => store.Get().Project.Devices);
         app.MapGet("/api/v1/projects", (ProjectStore store) => store.ListFiles());
         app.MapGet("/api/v1/runtime", (ProjectStore store) => store.GetRuntime());
+        app.MapPost("/api/v1/instruments/{id:guid}/conveyor",(Guid id,ConveyorMutation request,ProjectStore store)=>store.SetConveyor(id,request.Speed));
+        app.MapPost("/api/v1/instruments/{id:guid}/gripper",(Guid id,GripperMutation request,ProjectStore store)=>store.SetGripper(id,request.Close));
+        app.MapPost("/api/v1/cell/generate",(CellMutation request,ProjectStore store)=>store.GeneratePickPlace(request.RobotId,request.ConveyorId,request.SensorId,request.GripperId,request.CameraId,request.PointIds,request.SpeedPercent,request.ExpectedRevision));
+        app.MapPut("/api/v1/cell/sequence",(SequenceMutation request,ProjectStore store)=>store.SetCellSequence(request.Sequence,request.ExpectedRevision));
+        app.MapPost("/api/v1/cell/start",(ProjectStore store)=>store.StartCell());
+        app.MapPost("/api/v1/cell/stop",(ProjectStore store)=>{store.StopCell();return store.GetRuntime();});
+        app.MapPost("/api/v1/cell/reset",(ProjectStore store)=>store.ResetCell());
+        app.MapGet("/api/v1/cameras/{id:guid}/triggers",(Guid id,long? after,ProjectStore store)=>store.TriggerEvents(id,after??0));
+        app.MapGet("/api/v1/virtual-camera",(VirtualCameraService service)=>service.Status());
+        app.MapPost("/api/v1/virtual-camera/start",async(VirtualCameraMutation request,HttpContext ctx,VirtualCameraService service)=>await service.Start(request.CameraId,request.ListenAddress,$"http://127.0.0.1:{ctx.Connection.LocalPort}",ctx.RequestAborted));
+        app.MapPost("/api/v1/virtual-camera/stop",(VirtualCameraService service)=>service.Stop());
         app.MapGet("/api/v1/robot-model", () => new { modelId = Generic6R.ModelId, joints = Generic6R.Definitions });
         app.MapGet("/api/v1/robot-models", () => new[] {
             new { modelId = Generic6R.ModelId, joints = RobotModels.Definitions(Generic6R.ModelId) },
@@ -126,6 +144,11 @@ public static class SimulationHost
     }
 
     private record RevisionMutation(long ExpectedRevision);
+    private record ConveyorMutation(double Speed);
+    private record GripperMutation(bool Close);
+    private record VirtualCameraMutation(Guid CameraId,string ListenAddress);
+    private record SequenceMutation(long ExpectedRevision,CellSequence Sequence);
+    private record CellMutation(long ExpectedRevision,Guid RobotId,Guid ConveyorId,Guid SensorId,Guid GripperId,Guid CameraId,Guid[] PointIds,double SpeedPercent=35);
     private record JointMutation(long ExpectedRevision, double[] Joints, double SpeedPercent = 25);
     private record CartesianMutation(long ExpectedRevision, CartesianRequest Motion);
     private record TeachMutation(long ExpectedRevision, string Name, string Frame = "base");

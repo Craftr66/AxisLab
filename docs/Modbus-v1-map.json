@@ -1,4 +1,4 @@
-﻿{
+{
   "protocol": "AxisLab Modbus TCP v1",
   "version": 1,
   "unitId": 1,
@@ -12,7 +12,7 @@
     16
   ],
   "heartbeatMilliseconds": 5000,
-  "extension": 1,
+  "extension": 2,
   "commands": {
     "acquire": 1,
     "release": 2,
@@ -22,7 +22,11 @@
     "cancelCapture": 6,
     "movePose": 7,
     "moveL": 8,
-    "teachPoint": 9
+    "teachPoint": 9,
+    "setConveyor": 10,
+    "setGripper": 11,
+    "startCell": 12,
+    "stopCell": 13
   },
   "states": {
     "idle": 0,
@@ -40,7 +44,11 @@
     "box": 20,
     "dotTarget": 21,
     "dotGrid": 22,
-    "orientedPart": 23
+    "orientedPart": 23,
+    "conveyor": 30,
+    "gripper": 31,
+    "photoelectric": 32,
+    "workpiece": 33
   },
   "errors": {
     "None": 0,
@@ -83,8 +91,40 @@
     "InvalidFrame": 37,
     "UnsupportedPose": 38,
     "MountedRobotUnsupported": 39,
+    "CellActive": 41,
+    "InvalidInstrument": 42,
+    "InvalidCellSequence": 43,
+    "CellTimeout": 44,
+    "GripEmpty": 45,
+    "CellCancelled": 46,
     "InternalError": 255
   },
+  "instrumentRegisters": [
+    {
+      "address": 108,
+      "count": 1,
+      "access": "R",
+      "name": "Selected instrument flags:bit0 belt running,bit1 photoelectric input,bit2 gripper closed,bit3 associated part"
+    },
+    {
+      "address": 110,
+      "count": 2,
+      "access": "R",
+      "name": "Photoelectric rising edge count UInt32"
+    },
+    {
+      "address": 112,
+      "count": 2,
+      "access": "R",
+      "name": "Conveyor speed mm/s Float32"
+    },
+    {
+      "address": 114,
+      "count": 1,
+      "access": "R",
+      "name": "Associated workpiece device number,0 none"
+    }
+  ],
   "registers": [
     {
       "address": 0,
@@ -102,7 +142,7 @@
       "address": 2,
       "count": 1,
       "access": "R",
-      "name": "Application 0x0200"
+      "name": "Application 0x0201"
     },
     {
       "address": 3,
@@ -330,13 +370,13 @@
       "address": 123,
       "count": 1,
       "access": "R",
-      "name": "v1 extension level 1"
+      "name": "v1 extension level 2"
     },
     {
       "address": 124,
       "count": 4,
       "access": "R",
-      "name": "Reserved zero"
+      "name": "Cell status 0idle/1running/2completed/3cancelled/4failed,step,total,error"
     },
     {
       "address": 128,
@@ -390,7 +430,7 @@
       "address": 206,
       "count": 12,
       "access": "RW",
-      "name": "Opcode3: J1..J6 Float32 unused axes zero; opcode7/8: XYZRxRyRz Float32"
+      "name": "Opcode3:J1..J6;7/8:XYZRxRyRz;10:first Float32 conveyor mm/s,0stop;11:first Float32 0open/1close"
     },
     {
       "address": 218,
