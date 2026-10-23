@@ -9,6 +9,9 @@ try {
  $options=@();if($NoRestore){$options+='--no-restore'}
  & dotnet build AxisLab.slnx -c Release -m:1 -nr:false -p:NuGetAudit=false --packages .cache/nuget-packages @options
  if($LASTEXITCODE -ne 0){throw 'Solution build failed'}
+ $cameraTarget=Join-Path $PWD 'src/WpfDemo/bin/Release/net9.0-windows/VirtualCamera'
+ New-Item -ItemType Directory -Path $cameraTarget -Force | Out-Null
+ Get-ChildItem -LiteralPath src/VirtualCamera/bin/Release/net10.0-windows -File | Copy-Item -Destination $cameraTarget -Force
  if($WithVisionMaster){
   & dotnet build src/VmDirectLink/AxisLab.VmDirectLink.csproj -c Release -m:1 -nr:false --packages .cache/nuget-packages @options
   if($LASTEXITCODE -ne 0){throw 'VM integration build failed; install VisionMaster 4.3 or pass VmAssembly to dotnet build'}
